@@ -28,6 +28,10 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+static struct list sleep_list;
+static int64_t next_tick_to_awake;
+
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -313,6 +317,69 @@ thread_yield (void)
   schedule ();
   intr_set_level (old_level);
 }
+
+void
+thread_sleep(int64_t wakeup_tick)
+{
+  struct thread *current_thread = thread_current();
+  
+  // Interrupts must be off when modifying the sleep list.
+  enum intr_level old_level = intr_disable();
+  
+  // Set the wakeup tick for the current thread.
+  current_thread->wakeup_tick = wakeup_tick;
+  
+  // Add the current thread to the sleep list.
+  list_insert_ordered(&sleep_list, &current_thread->elem, 
+                      (list_less_func *) &compare_wakeup_ticks, NULL);
+  
+  // Update the next tick to awake if necessary.
+  if (wakeup_tick < next_tick_to_awake) {
+      next_tick_to_awake = wakeup_tick;
+  }
+  
+  // Block the current thread.
+  thread_block();
+  
+  // Restore the previous interrupt level.
+  intr_set_level(old_level);
+}
+
+
+void 
+thread_awake(int64_t current_ticks) 
+{
+    struct list_elem *e = list_begin(&sleep_list);
+    
+    while (e != list_end(&sleep_list)) {
+        struct thread *t = list_entry(e, struct thread, elem);
+        
+        if (t->wakeup_tick <= current_ticks) {
+            e = list_remove(e);  // Remove from sleep list
+            thread_unblock(t);   // Unblock the thread
+        } else {
+            // Since the list is sorted, we can stop checking further
+            next_tick_to_awake = t->wakeup_tick;
+            break;
+        }
+    }
+}
+
+
+int
+get_next_tick_to_awake (void) 
+{
+  return next_tick_to_awake;
+}
+
+bool 
+compare_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  const struct thread *thread_a = list_entry(a, struct thread, elem);
+  const struct thread *thread_b = list_entry(b, struct thread, elem);
+  
+  return thread_a->wakeup_tick > thread_b->wakeup_tick;
+}
+
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
