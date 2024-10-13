@@ -692,11 +692,12 @@ thread_preemption(void) {
 void
 update_priority(void) {
   struct thread *cur = thread_current();
-  if (list_empty(&cur->donations_list))
-    cur->priority = cur->original_priority;
-  else {
+  cur->priority = cur->original_priority;
+  if (!list_empty(&cur->donations_list)) {
     list_sort(&cur->donations_list, compare_thread_donator_priority, NULL);
-    cur->priority = list_entry(list_front(&cur->donations_list), struct thread, donator)->priority;
+    struct thread *max_priority_donator = list_entry(list_front(&cur->donations_list), struct thread, donator);
+    if (max_priority_donator->priority > cur->priority)
+      cur->priority = max_priority_donator->priority;
   }
 }
 
