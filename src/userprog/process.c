@@ -98,6 +98,13 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  /* Allow write back to executable file and close it. */
+  if (cur->exec_file != NULL) {
+      file_allow_write(cur->exec_file);
+      file_close(cur->exec_file);
+      cur->exec_file = NULL;
+  }
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -229,6 +236,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+ /* Deny writes to the executable while it's being executed. */
+  t->exec_file = file;
+  file_deny_write(file);
+
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -312,7 +323,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 

@@ -504,6 +504,9 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  for (int i = 0; i < FD_TABLE_SIZE; i++)
+    t->fd_table[i] = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -756,4 +759,37 @@ void
 recalculate_load_avg(void) {
   int ready_threads = thread_current() != idle_thread ? list_size(&ready_list) + 1 : list_size(&ready_list);
   load_avg = fixed_add(fixed_multiply(fixed_divide_int(convert_int_to_fixed(59),60), load_avg), fixed_divide_int(convert_int_to_fixed(ready_threads), 60));
+}
+
+int
+thread_add_file (struct file *file)
+{
+  struct thread *t = thread_current();
+  for (int i = 2; i < FD_TABLE_SIZE; i++) { 
+    if (t->fd_table[i] == NULL) {
+      t->fd_table[i] = file;
+      return i;
+    }
+  }
+  return -1;
+}
+
+struct file *
+thread_get_file (int fd) 
+{
+  struct thread *t = thread_current();
+  if (fd < 0 || fd >= FD_TABLE_SIZE)
+    return NULL;
+  return t->fd_table[fd];
+}
+
+void
+thread_remove_file (int fd) 
+{
+  struct thread *t = thread_current();
+
+  if (fd < 2 || fd >= FD_TABLE_SIZE || t->fd_table[fd] == NULL)
+    return;
+
+  t->fd_table[fd] = NULL;
 }

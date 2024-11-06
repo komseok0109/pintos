@@ -29,6 +29,9 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
+/* File Descriptor size */
+#define FD_TABLE_SIZE 128
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -102,6 +105,9 @@ struct thread
     int nice;
     int recent_cpu;
 
+    struct file *exec_file;
+    struct file *fd_table[FD_TABLE_SIZE];
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
@@ -168,5 +174,9 @@ void increment_recent_cpu(void);
 void recalculate_recent_cpu_foreach(struct thread *t);
 void recalculate_recent_cpu(void);
 void recalculate_load_avg(void);
+
+int thread_add_file (struct file *file);
+struct file *thread_get_file (int fd);
+
 
 #endif /* threads/thread.h */
