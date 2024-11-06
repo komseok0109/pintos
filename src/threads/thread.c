@@ -198,7 +198,6 @@ thread_create (const char *name, int priority,
   if (thread_mlfqs) {
     t->nice = parent->nice;
     t->recent_cpu = parent->recent_cpu;
-    recalculate_priority_foreach(t);
   }
 
   /* Stack frame for kernel_thread(). */
@@ -218,6 +217,10 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  if (thread_mlfqs){
+    recalculate_priority_foreach(t);
+  }
 
   thread_preemption(); 
 
@@ -495,7 +498,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
+  if (!thread_mlfqs)
+    t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->original_priority = priority;
   list_init(&t->donations_list);
@@ -691,11 +695,12 @@ thread_preemption(void) {
 void
 update_priority(void) {
   struct thread *cur = thread_current();
-  if (list_empty(&cur->donations_list))
-    cur->priority = cur->original_priority;
-  else {
+  cur->priority = cur->original_priority;
+  if (!list_empty(&cur->donations_list)) {
     list_sort(&cur->donations_list, compare_thread_donator_priority, NULL);
-    cur->priority = list_entry(list_front(&cur->donations_list), struct thread, donator)->priority;
+    struct thread *max_priority_donator = list_entry(list_front(&cur->donations_list), struct thread, donator);
+    if (max_priority_donator->priority > cur->priority)
+      cur->priority = max_priority_donator->priority;
   }
 }
 
@@ -733,6 +738,8 @@ recalculate_priority(void){
   struct list_elem *e;
   for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
     recalculate_priority_foreach(list_entry(e, struct thread, allelem));
+  if (!list_empty(&ready_list))
+    list_sort(&ready_list, compare_thread_prority, NULL);
 }
 
 void
