@@ -29,7 +29,6 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
-/* File Descriptor size */
 #define FD_TABLE_SIZE 128
 
 /* A kernel thread or user process.
@@ -105,9 +104,6 @@ struct thread
     int nice;
     int recent_cpu;
 
-    struct file *exec_file;
-    struct file *fd_table[FD_TABLE_SIZE];
-
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
@@ -115,6 +111,20 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
+    struct thread *parent;
+    int child_exit_status;
+
+    bool is_child_loaded;
+    struct list children;
+    struct list_elem child;
+    bool has_parent_waited;
+
+    struct semaphore load_sema;
+    struct semaphore wait_sema;
+
+    struct file *exec_file;
+    struct file *fd_table[FD_TABLE_SIZE];
 #endif
 
     /* Owned by thread.c. */
@@ -177,6 +187,5 @@ void recalculate_load_avg(void);
 
 int thread_add_file (struct file *file);
 struct file *thread_get_file (int fd);
-
-
+void thread_remove_file (int fd);
 #endif /* threads/thread.h */

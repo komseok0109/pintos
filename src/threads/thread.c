@@ -200,6 +200,11 @@ thread_create (const char *name, int priority,
     t->recent_cpu = parent->recent_cpu;
   }
 
+  #ifdef USERPROG
+    t->parent = parent;
+    list_push_back(&parent->children, &t->child);
+  #endif 
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -505,12 +510,19 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->donations_list);
   t->waiting_lock = NULL;
 
+  #ifdef USERPROG
+    list_init(&t->children);
+    sema_init(&t->wait_sema, 0);
+    sema_init(&t->load_sema, 0);
+    t->is_child_loaded = false;
+    t->has_parent_waited = false;
+    for (int i = 0; i < FD_TABLE_SIZE; i++)
+      t->fd_table[i] = NULL;
+  #endif
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
-
-  for (int i = 0; i < FD_TABLE_SIZE; i++)
-    t->fd_table[i] = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -687,8 +699,12 @@ thread_preemption(void) {
   if (!list_empty(&ready_list)){
     struct thread *cur = thread_current ();
     struct thread *most_priority_thread = list_entry(list_front(&ready_list), struct thread, elem);
-    if (cur->priority < most_priority_thread->priority)
-      thread_yield();
+    if (cur->priority < most_priority_thread->priority){
+      if (intr_context())
+        intr_yield_on_return();
+      else
+        thread_yield();
+    }
   }
 }
 
@@ -794,9 +810,7 @@ void
 thread_remove_file (int fd) 
 {
   struct thread *t = thread_current();
-
   if (fd < 2 || fd >= FD_TABLE_SIZE || t->fd_table[fd] == NULL)
     return;
-
   t->fd_table[fd] = NULL;
 }

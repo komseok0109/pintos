@@ -18,6 +18,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define MAX_ARGUMENTS 128
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -30,6 +32,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  char *program_name, *arguments;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -37,12 +40,16 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  program_name = strtok_r(fn_copy, " ", &arguments);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (program_name, PRI_DEFAULT, start_process, arguments);
+  sema_down(&thread_current()->load_sema);
+
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-  return tid;
+    palloc_free_page (fn_copy);
+
+  return thread_current()->is_child_loaded ? tid : -1;
 }
 
 /* A thread function that loads a user process and starts it
@@ -50,7 +57,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  char *arguments = file_name_;
   struct intr_frame if_;
   bool success;
 
@@ -59,12 +66,56 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (thread_name(), &if_.eip, &if_.esp);
+
+    char *argument, *save_ptr;
+  char *argv[MAX_ARGUMENTS];
+  int argc = 0;
+
+  if_.esp -= strlen(thread_name()) + 1;
+  memcpy(if_.esp, thread_name(), strlen(thread_name()) + 1);
+  argv[argc++] = if_.esp; 
+
+  argument = strtok_r(arguments, " ", &save_ptr);
+  while (argument != NULL && argc < MAX_ARGUMENTS){
+    if_.esp -= strlen(argument) + 1;
+    memcpy(if_.esp, argument, strlen(argument)+1);
+    argv[argc++] = if_.esp;
+    argument = strtok_r(NULL, " ", &save_ptr);
+  }
+
+  int alignment = (uintptr_t)if_.esp % 4;
+  if (alignment != 0)
+    if_.esp -= alignment;
+
+  if_.esp -= sizeof(char *);
+  *(char **)if_.esp = NULL;
+
+  for (int i = argc - 1; i >= 0; i--){
+    if_.esp -= sizeof(char *);
+    *(char **)if_.esp = argv[i];
+  }
+  if_.esp -= sizeof(char **);
+  *(char ***)if_.esp = if_.esp + sizeof(char *);
+
+  if_.esp -= sizeof(int);
+  *(int *)if_.esp = argc;
+  
+  if_.esp -= sizeof(void *);
+  *(void **)if_.esp = NULL;
+
+
+  struct thread *cur = thread_current();
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  palloc_free_page (pg_round_down(arguments));
+  if (!success) {
     thread_exit ();
+  }
+
+  cur->parent->is_child_loaded = true;
+  sema_up(&cur->parent->load_sema);
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -86,9 +137,31 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  struct thread *parent = thread_current();
+  
+  bool valid_tid = false;
+  struct list_elem *e;
+  struct thread* child;
+  for (e = list_begin (&parent->children); e != list_end (&parent->children); e = list_next (e)){
+    child = list_entry(e, struct thread, child);
+    if (child_tid == child->tid && !child->has_parent_waited){
+      valid_tid = true;
+      break;
+    } 
+  }
+
+  int status = -1;
+  if (!valid_tid)
+    return status;
+  else {
+    child->has_parent_waited = true;
+    sema_down(&parent->wait_sema);
+    status = parent->child_exit_status;
+  }
+
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -98,7 +171,11 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  /* Allow write back to executable file and close it. */
+  if (cur->parent != NULL) {
+    list_remove(&cur->child);
+    sema_up(&cur->parent->wait_sema);
+  }
+
   if (cur->exec_file != NULL) {
       file_allow_write(cur->exec_file);
       file_close(cur->exec_file);
@@ -235,8 +312,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
- /* Deny writes to the executable while it's being executed. */
+  
   t->exec_file = file;
   file_deny_write(file);
 
