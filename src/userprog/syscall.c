@@ -10,15 +10,16 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
 
-static struct lock filesys_lock;
+static struct lock fs_lock;
 
 void
 syscall_init (void) 
 {
-  lock_init(&filesys_lock);
+  lock_init(&fs_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -91,154 +92,173 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 }
 
-void halt (void){
+void 
+halt (void){
   shutdown_power_off();
 }
 
-void exit (int status){
-  printf ("%s: exit(%d)\n", thread_name(), status);
-
+void 
+exit (int status){
   struct thread *cur = thread_current();
 
   if (cur->parent != NULL)
     cur->parent->child_exit_status = status;
 
-  for (int i = 0; i < FD_TABLE_SIZE && cur->fd_table[i] != NULL; i++)
-    close(i);
+  for (int i = 0; i < FD_TABLE_SIZE; i++) {
+    if (cur->fd_table[i] != NULL)
+      close(i);
+  }
+
+  printf ("%s: exit(%d)\n", thread_name(), status);
 
   thread_exit();
 }
 
-pid_t exec (const char *cmd_line){
+pid_t 
+exec (const char *cmd_line){
   check_pointer_validity(cmd_line);
   
   pid_t pid;
-  lock_acquire(&filesys_lock);
+  lock_acquire(&fs_lock);
   pid = process_execute(cmd_line);
-  lock_release(&filesys_lock);
+  lock_release(&fs_lock);
 
   return pid;
 }
 
-int wait (pid_t pid){
+int 
+wait (pid_t pid){
   return process_wait(pid);
 }
 
-bool create (const char *file, unsigned initial_size) {
+bool 
+create (const char *file, unsigned initial_size) {
   check_pointer_validity(file);
   bool success;
-  lock_acquire(&filesys_lock);
+  lock_acquire(&fs_lock);
   success = filesys_create(file, initial_size); 
-  lock_release(&filesys_lock);
+  lock_release(&fs_lock);
   return success;
 }
 
-bool remove (const char *file) {
+bool 
+remove (const char *file) {
   check_pointer_validity(file);
   bool success;
-  lock_acquire(&filesys_lock);
+  lock_acquire(&fs_lock);
   success = filesys_remove(file); 
-  lock_release(&filesys_lock);
+  lock_release(&fs_lock);
   return success;
 }
 
-int open (const char *file) {
+int 
+open (const char *file) {
   check_pointer_validity(file);
-  lock_acquire(&filesys_lock);
+  int fd;
+  lock_acquire(&fs_lock);
   struct file *f = filesys_open(file);
-  lock_release(&filesys_lock);
-  if (f == NULL)
-    return -1;
-  int fd = thread_add_file(f);
-  if (fd == -1)
+  fd = f != NULL ? thread_add_file_to_fd_table(f) : -1;
+  if (f != NULL && fd == -1)
     file_close(f);
+  lock_release(&fs_lock);
   return fd;
 }
 
-int filesize (int fd) {
+int 
+filesize (int fd) {
   int length;
+  lock_acquire(&fs_lock);
   struct file *f = thread_get_file(fd);
-  if (f == NULL)
-    return -1;
-  lock_acquire(&filesys_lock);
-  length = file_length(f);
-  lock_release(&filesys_lock);
+  length = f != NULL ? file_length(f) : -1;
+  lock_release(&fs_lock);
   return length;
 }
 
-int read (int fd, void *buffer, unsigned size) {
+int 
+read (int fd, void *buffer, unsigned size) {
   if (fd < 0 || buffer == NULL)
     return -1;
   
   int bytes_read;
   check_buffer_validity(buffer, size);
-  if (fd == 0) {
+  
+  lock_acquire(&fs_lock);
+  if (fd == STDIN_FILENO) {
     unsigned i;
     for (i = 0; i < size; i++) {
-      if (((char *)buffer)[i] = input_getc() == '\0')
+      if ((((char *)buffer)[i] = input_getc()) == '\0')
         break;
     }
-    return i;
+    bytes_read = i;
   }
-  struct file *f = thread_get_file(fd);
-  if (f == NULL)
-    return -1;
-  lock_acquire(&filesys_lock);
-  bytes_read = file_read(f, buffer, size);
-  lock_release(&filesys_lock);
+  else {
+    struct file *f = thread_get_file(fd);
+    bytes_read = f != NULL ? file_read(f, buffer, size) : -1;
+  }
+  lock_release(&fs_lock);
   
   return bytes_read;
 }
 
-int write (int fd, const void *buffer, unsigned size) {
+int 
+write (int fd, const void *buffer, unsigned size) {
   if (fd < 0 || buffer == NULL)
     return -1;
   check_buffer_validity(buffer, size);
-  if (fd == 1) {
+  int bytes_written;
+
+  lock_acquire(&fs_lock);
+  if (fd == STDOUT_FILENO) {
     putbuf(buffer, size);
-    return size;
+    bytes_written = size;
   }
-  struct file *f = thread_get_file(fd);
-  if (f == NULL)
-    return -1;
-  return file_write(f, buffer, size);
+  else {
+    struct file *f = thread_get_file(fd);
+    bytes_written = f != NULL ? file_write(f, buffer, size) : -1;
+  }
+  lock_release(&fs_lock);
+
+  return bytes_written;
 }
 
-void seek (int fd, unsigned position) {
+void 
+seek (int fd, unsigned position) {
+  lock_acquire(&fs_lock);
   struct file *f = thread_get_file(fd);
-  if (f != NULL) {
-    lock_acquire(&filesys_lock);
+  if (f != NULL) 
     file_seek(f, position);
-    lock_release(&filesys_lock);
-  }
+  lock_release(&fs_lock);
 }
 
-unsigned tell (int fd) {
+unsigned 
+tell (int fd) {
+  int position;
+  lock_acquire(&fs_lock);
   struct file *f = thread_get_file(fd);
-  if (f == NULL)
-    return -1;
-  lock_acquire(&filesys_lock);
-  unsigned position = file_tell(f);
-  lock_release(&filesys_lock);
+  position = f != NULL ? file_tell(f) : -1;
+  lock_release(&fs_lock);
   return position;
 }
 
-void close (int fd) {
+void 
+close (int fd) {
+  lock_acquire(&fs_lock);
   struct file *f = thread_get_file(fd);
   if (f != NULL) {
-    lock_acquire(&filesys_lock);
     file_close(f);
-    thread_remove_file(fd);
-    lock_release(&filesys_lock);
+    thread_remove_file_from_fd_table(fd);
   }
+  lock_release(&fs_lock);
 }
 
-void check_pointer_validity (const void* ptr){
+void 
+check_pointer_validity (const void* ptr){
   if (ptr == NULL || !is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL)
     exit(-1);
 }
 
-void check_buffer_validity (const void *buffer, unsigned size) {
+void 
+check_buffer_validity (const void *buffer, unsigned size) {
   char *ptr = (char *) buffer;
   for (unsigned i = 0; i < size; i++) {
     check_pointer_validity(ptr + i);

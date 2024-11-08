@@ -122,6 +122,7 @@ struct thread
 
     struct semaphore load_sema;
     struct semaphore wait_sema;
+    struct semaphore synch_sema;
 
     struct file *exec_file;
     struct file *fd_table[FD_TABLE_SIZE];
@@ -185,7 +186,7 @@ void recalculate_recent_cpu_foreach(struct thread *t);
 void recalculate_recent_cpu(void);
 void recalculate_load_avg(void);
 
-int thread_add_file (struct file *file);
+int thread_add_file_to_fd_table (struct file *file);
 struct file *thread_get_file (int fd);
-void thread_remove_file (int fd);
+void thread_remove_file_from_fd_table (int fd);
 #endif /* threads/thread.h */

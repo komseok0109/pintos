@@ -68,7 +68,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (thread_name(), &if_.eip, &if_.esp);
 
-    char *argument, *save_ptr;
+  char *argument, *save_ptr;
   char *argv[MAX_ARGUMENTS];
   int argc = 0;
 
@@ -95,6 +95,7 @@ start_process (void *file_name_)
     if_.esp -= sizeof(char *);
     *(char **)if_.esp = argv[i];
   }
+
   if_.esp -= sizeof(char **);
   *(char ***)if_.esp = if_.esp + sizeof(char *);
 
@@ -104,17 +105,16 @@ start_process (void *file_name_)
   if_.esp -= sizeof(void *);
   *(void **)if_.esp = NULL;
 
-
-  struct thread *cur = thread_current();
-
   /* If load failed, quit. */
   palloc_free_page (pg_round_down(arguments));
   if (!success) {
     thread_exit ();
   }
 
+  struct thread *cur = thread_current();
   cur->parent->is_child_loaded = true;
   sema_up(&cur->parent->load_sema);
+  sema_down(&cur->synch_sema);
 
 
   /* Start the user process by simulating a return from an
@@ -141,27 +141,25 @@ process_wait (tid_t child_tid)
 {
   struct thread *parent = thread_current();
   
-  bool valid_tid = false;
+  bool is_tid_valid = false;
   struct list_elem *e;
   struct thread* child;
   for (e = list_begin (&parent->children); e != list_end (&parent->children); e = list_next (e)){
     child = list_entry(e, struct thread, child);
     if (child_tid == child->tid && !child->has_parent_waited){
-      valid_tid = true;
+      is_tid_valid = true;
+      child->has_parent_waited = true;
+      sema_up(&child->synch_sema);
       break;
     } 
   }
 
-  int status = -1;
-  if (!valid_tid)
-    return status;
+  if (!is_tid_valid)
+    return -1;
   else {
-    child->has_parent_waited = true;
     sema_down(&parent->wait_sema);
-    status = parent->child_exit_status;
+    return parent->child_exit_status;
   }
-
-  return status;
 }
 
 /* Free the current process's resources. */
@@ -174,6 +172,8 @@ process_exit (void)
   if (cur->parent != NULL) {
     list_remove(&cur->child);
     sema_up(&cur->parent->wait_sema);
+    if (!cur->parent->is_child_loaded)
+      sema_up(&cur->parent->load_sema);
   }
 
   if (cur->exec_file != NULL) {
@@ -402,7 +402,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   return success;
 }
 
-/* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
 

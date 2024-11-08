@@ -512,8 +512,9 @@ init_thread (struct thread *t, const char *name, int priority)
 
   #ifdef USERPROG
     list_init(&t->children);
-    sema_init(&t->wait_sema, 0);
     sema_init(&t->load_sema, 0);
+    sema_init(&t->wait_sema, 0);
+    sema_init(&t->synch_sema, 0);
     t->is_child_loaded = false;
     t->has_parent_waited = false;
     for (int i = 0; i < FD_TABLE_SIZE; i++)
@@ -784,33 +785,30 @@ recalculate_load_avg(void) {
   load_avg = fixed_add(fixed_multiply(fixed_divide_int(convert_int_to_fixed(59),60), load_avg), fixed_divide_int(convert_int_to_fixed(ready_threads), 60));
 }
 
-int
-thread_add_file (struct file *file)
-{
-  struct thread *t = thread_current();
+int 
+thread_add_file_to_fd_table (struct file *file) {
+  struct file **fd_table = thread_current()->fd_table;
   for (int i = 2; i < FD_TABLE_SIZE; i++) { 
-    if (t->fd_table[i] == NULL) {
-      t->fd_table[i] = file;
+    if (fd_table[i] == NULL) {
+      fd_table[i] = file;
       return i;
     }
   }
   return -1;
 }
 
-struct file *
-thread_get_file (int fd) 
-{
-  struct thread *t = thread_current();
+struct 
+file *thread_get_file (int fd) {
+  struct file **fd_table = thread_current()->fd_table;
   if (fd < 0 || fd >= FD_TABLE_SIZE)
     return NULL;
-  return t->fd_table[fd];
+  return fd_table[fd];
 }
 
-void
-thread_remove_file (int fd) 
-{
-  struct thread *t = thread_current();
-  if (fd < 2 || fd >= FD_TABLE_SIZE || t->fd_table[fd] == NULL)
+void 
+thread_remove_file_from_fd_table (int fd) {
+  struct file **fd_table = thread_current()->fd_table;
+  if (fd < 2 || fd >= FD_TABLE_SIZE || fd_table[fd] == NULL)
     return;
-  t->fd_table[fd] = NULL;
+  fd_table[fd] = NULL;
 }
