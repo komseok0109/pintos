@@ -144,7 +144,7 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  check_pointer_validity(fault_addr);
+  exit(-1);
 
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
