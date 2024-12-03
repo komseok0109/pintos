@@ -34,9 +34,9 @@ size_t swap_out(struct page *page) {
         PANIC("No free swap slots");
     }
     
-    block_write(swap_block, slot_index * SECTORS_PER_PAGE, page->frame->kpage);
+    block_write(swap_block, slot_index * SECTORS_PER_PAGE, page->frame->frame_addr);
 
-    spt_add_swap_entry(page->spt, page->vaddr, slot_index);
+    spt_add_swap_entry(&thread_current()->spt, page->vaddr, slot_index);
 
     lock_release(&swap_lock);
     
@@ -46,16 +46,16 @@ size_t swap_out(struct page *page) {
 void swap_in(struct page *page) {
     lock_acquire(&swap_lock);
 
-    void *frame = allocate_frame(PAL_USER, page->vaddr);
+    struct frame *frame = allocate_frame(PAL_USER, page->vaddr);
 
     if (frame == NULL) {
         lock_release(&swap_lock);
         PANIC("Failed to allocate frame for swapping in");
     }
 
-    block_read(swap_block, page->swap_index * SECTORS_PER_PAGE, frame);
+    block_read(swap_block, page->swap_index * SECTORS_PER_PAGE, frame->frame_addr);
 
-    install_page(page->vaddr, frame, true);
+    install_page(page->vaddr, frame->frame_addr, true);
 
     bitmap_reset(swap_table, page->swap_index);
 

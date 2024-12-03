@@ -4,11 +4,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "threads/palloc.h"
+#include "threads/synch.h"
+#include "lib/kernel/list.h"
 
 struct frame {
-  void *kpage; // 커널 페이지 주소
-  void *upage; // 사용자 페이지 주소
+    void *frame_addr;
+    struct spt_entry *page;
+    bool is_allocated;
+    struct list_elem elem;
 };
+
+extern struct list frame_table;
+extern struct lock ft_lock;
 
 void frame_init(void);
 struct frame *allocate_frame(enum palloc_flags flags, void *upage);
