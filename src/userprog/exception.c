@@ -156,23 +156,25 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
 
-   if (not_present) {
-        struct thread *cur = thread_current();
+   #ifdef VM
+      if (not_present) {
+         struct thread *cur = thread_current();
 
-        /* Check if the fault is due to stack growth. */
-        if (is_stack_access(fault_addr, f->esp)) {
+         /* Check if the fault is due to stack growth. */
+         if (is_stack_access(fault_addr, f->esp)) {
             if (!grow_stack(fault_addr)) {
-                exit(-1); // Terminate process if stack growth fails
+               exit(-1); // Terminate process if stack growth fails
             }
             return;
-        }
+         }
 
-        /* Attempt to handle the page fault by loading the page from swap or file system. */
-        struct page *page = spt_find_page(&cur->spt, pg_round_down(fault_addr));
-        if (page != NULL && vm_do_claim_page(page)) {
+         /* Attempt to handle the page fault by loading the page from swap or file system. */
+         struct page *page = spt_find_page(&cur->spt, pg_round_down(fault_addr));
+         if (page != NULL && vm_do_claim_page(page)) {
             return;
-        }
-    }
+         }
+      }
+   #endif
    
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

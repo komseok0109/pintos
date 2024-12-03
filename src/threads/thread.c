@@ -15,6 +15,9 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#ifdef VM
+#include "vm/page.h"
+#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -310,9 +313,12 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
-#ifdef USERPROG
-  process_exit ();
-#endif
+  #ifdef USERPROG
+    process_exit ();
+  #endif
+  #ifdef VM
+    spt_destroy(&thread_current()->spt);
+  #endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -519,6 +525,10 @@ init_thread (struct thread *t, const char *name, int priority)
     t->has_parent_waited = false;
     for (int i = 0; i < FD_TABLE_SIZE; i++)
       t->fd_table[i] = NULL;
+  #endif
+
+  #ifdef VM
+    hash_init(&t->spt, page_hash, page_less, NULL);
   #endif
 
   old_level = intr_disable ();
@@ -812,3 +822,21 @@ thread_remove_file_from_fd_table (int fd) {
     return;
   fd_table[fd] = NULL;
 }
+
+#ifdef VM
+/* Helper function to free a page */
+static void spt_free_page(struct hash_elem *e, void *aux) {
+    struct page *page = hash_entry(e, struct page, hash_elem);
+    
+    if (page->frame != NULL) {
+        free_frame(page->frame);
+    }
+    
+    free(page);
+}
+
+/* Destroys the supplemental page table */
+void spt_destroy(struct hash *spt) {
+    hash_destroy(spt, spt_free_page);
+}
+#endif
