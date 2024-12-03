@@ -5,6 +5,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "threads/vaddr.h"
+#include "vm/page.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -151,6 +155,25 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+
+   if (not_present) {
+        struct thread *cur = thread_current();
+
+        /* Check if the fault is due to stack growth. */
+        if (is_stack_access(fault_addr, f->esp)) {
+            if (!grow_stack(fault_addr)) {
+                exit(-1); // Terminate process if stack growth fails
+            }
+            return;
+        }
+
+        /* Attempt to handle the page fault by loading the page from swap or file system. */
+        struct page *page = spt_find_page(&cur->spt, pg_round_down(fault_addr));
+        if (page != NULL && vm_do_claim_page(page)) {
+            return;
+        }
+    }
+   
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
