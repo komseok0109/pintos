@@ -9,7 +9,7 @@ struct frame
     void *frame_addr;
     struct spt_entry *page;
     struct list_elem elem;
-}
+};
 
 void frame_init(void);
 void *allocate_frame(struct spt_entry *page);

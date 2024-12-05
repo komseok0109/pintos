@@ -6,8 +6,7 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include <hash.h>
-#include "threads/synch.h"
-#include <hash.h>
+#include "userprog/syscall.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -105,13 +104,6 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    int64_t wakeup_tick; 
-    int original_priority;
-    struct list donations_list;
-    struct lock *waiting_lock;
-    struct list_elem donator;
-    int nice;
-    int recent_cpu;
     int64_t wakeup_tick; 
     int original_priority;
     struct list donations_list;

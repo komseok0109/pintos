@@ -1,11 +1,12 @@
 #include "vm/frame.h"
-#include "<list.h>"
+#include <list.h>
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
-#include "vn/page.h"
+#include "vm/page.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "vm/swap.h"
 
 struct list frame_table;
 struct lock frame_table_lock;
@@ -39,7 +40,7 @@ allocate_frame(struct spt_entry *spte)
 
   f->frame_addr = frame_addr;
   f->page = spte;
-  spte->frame = f;
+  spte->f = f;
   list_push_back(&frame_table, &f->elem);
   lock_release(&frame_table_lock);
   return frame_addr;
@@ -53,7 +54,7 @@ free_frame(void *addr)
   for (e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
     struct frame *f = list_entry(e, struct frame, elem);
     if (f->frame_addr == addr) {
-        palloc_free_page(f->addr);
+        palloc_free_page(f->frame_addr);
         list_remove(e);
         free(f);
         lock_release(&frame_table_lock);
@@ -95,7 +96,7 @@ choose_victim_clock(void)
 
   while (true) {
     struct frame *candidate = list_entry(clock_hand, struct frame, elem);
-    if (!pagedir_is_accessed(candidate->page->owner->pagedir, candidate->spte->vaddr)) {
+    if (!pagedir_is_accessed(candidate->page->owner->pagedir, candidate->page->vaddr)) {
         return candidate;
     }
     pagedir_set_accessed(candidate->page->owner->pagedir, candidate->page->vaddr, false);

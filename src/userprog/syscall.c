@@ -11,14 +11,9 @@
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "devices/input.h"
-#include "threads/vaddr.h"
-#include "userprog/process.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
-#include "devices/shutdown.h"
-#include "threads/synch.h"
-#include "userprog/pagedir.h"
-#include "devices/input.h"
+#include "threads/malloc.h"
+#include <round.h>
+#include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -54,7 +49,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_WAIT:
       check_pointer_validity (args + 1);
-      f->eax = wait((pid_t) args[1]);
+      f->eax = sys_wait((pid_t) args[1]);
       break;
     case SYS_CREATE:
       check_pointer_validity (args + 1);
@@ -101,7 +96,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
       check_pointer_validity (args + 1);
       check_pointer_validity (args + 2);
-      f->eax = mmap(args[1], args[2]);
+      f->eax = mmap(args[1], (void*) args[2]);
       break;
     case SYS_MUNMAP:
       check_pointer_validity (args + 1);
@@ -147,7 +142,7 @@ exec (const char *cmd_line){
 }
 
 int 
-wait (pid_t pid){
+sys_wait (pid_t pid){
   return process_wait(pid);
 }
 
@@ -290,7 +285,7 @@ mapid_t mmap(int fd, void *addr) {
 
   if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1) return -1;
 
-  struct file *file = file_reopen(fd_to_file(fd));
+  struct file *file = file_reopen(thread_get_file(fd));
   if (file == NULL || file_length(file) == 0) return -1;
 
   size_t file_size = file_length(file);
@@ -334,15 +329,15 @@ void munmap(mapid_t mapping) {
     if (m->mapid == mapping) {
       for (size_t i = 0; i < m->page_count; i++) {
         void *page_addr = m->start_addr + i * PGSIZE;
-        struct spt_entry *spte = spt_find_entry(&cur->spt, page_addr);
+        struct spt_entry *spte = find_spt_entry(page_addr);
 
         if (spte != NULL && pagedir_is_dirty(cur->pagedir, page_addr)) {
-          file_write_at(m->file, page_addr, spte->read_bytes, spte->file_offset);
+          file_write_at(m->file, page_addr, spte->read_bytes, spte->offset);
         }
 
         free_frame(pagedir_get_page(cur->pagedir, page_addr));
         pagedir_clear_page(cur->pagedir, page_addr);
-        spt_remove_entry(&cur->spt, spte);
+        delete_spt_entry(spte);
       }
 
       file_close(m->file);

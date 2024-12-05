@@ -5,6 +5,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -144,8 +147,6 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  exit(-1);
-
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
@@ -154,7 +155,7 @@ page_fault (struct intr_frame *f)
   if (!not_present)
    exit(-1);
   
-  struct spt_entry *spte = spt_find_entry(fault_addr);
+  struct spt_entry *spte = find_spt_entry(fault_addr);
   if (spte != NULL) {
    if (spte->type == FILE) {
       if (!load_page_lazy(spte)) 

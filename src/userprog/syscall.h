@@ -9,7 +9,7 @@ void syscall_init (void);
 void halt (void);
 void exit (int status);
 pid_t exec (const char *cmd_line);
-int wait (pid_t pid);
+int sys_wait (pid_t pid);
 bool create (const char *file, unsigned initial_size);
 bool remove (const char *file);
 int open (const char *file);
@@ -27,12 +27,12 @@ typedef int mapid_t;
 
 struct file_mapping 
 {
-    mapid_t id;
+    mapid_t mapid;
     struct file *file;
     void* start_addr;
     size_t page_count;
     struct list_elem elem;
-}
+};
 
 mapid_t mmap(int fd, void* addr);
 void munmap(mapid_t mapping);

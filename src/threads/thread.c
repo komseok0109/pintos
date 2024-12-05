@@ -330,9 +330,6 @@ thread_exit (void)
   #ifdef USERPROG
     process_exit ();
   #endif
-  #ifdef VM
-    spt_destroy(&thread_current()->spt);
-  #endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -413,23 +410,12 @@ thread_set_nice (int nice) {
   recalculate_priority_foreach(cur);
   thread_preemption(); 
   intr_set_level(old_level);
-thread_set_nice (int nice) {
-  enum intr_level old_level = intr_disable();
-  struct thread *cur = thread_current();
-  cur->nice = nice;
-  recalculate_priority_foreach(cur);
-  thread_preemption(); 
-  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  enum intr_level old_level = intr_disable();
-  int nice_value = thread_current()->nice;
-  intr_set_level(old_level);
-  return nice_value;
   enum intr_level old_level = intr_disable();
   int nice_value = thread_current()->nice;
   intr_set_level(old_level);
@@ -444,20 +430,12 @@ thread_get_load_avg (void)
   int scaled_load_avg = convert_fixed_to_int_nearest(fixed_multiply_int(load_avg, 100));
   intr_set_level (old_level);
   return scaled_load_avg;
-  enum intr_level old_level = intr_disable ();
-  int scaled_load_avg = convert_fixed_to_int_nearest(fixed_multiply_int(load_avg, 100));
-  intr_set_level (old_level);
-  return scaled_load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  enum intr_level old_level = intr_disable ();
-  int scaled_recent_cpu = convert_fixed_to_int_nearest(fixed_multiply_int(thread_current()->recent_cpu, 100));
-  intr_set_level (old_level);
-  return scaled_recent_cpu;
   enum intr_level old_level = intr_disable ();
   int scaled_recent_cpu = convert_fixed_to_int_nearest(fixed_multiply_int(thread_current()->recent_cpu, 100));
   intr_set_level (old_level);
@@ -569,7 +547,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   hash_init (&t->s_page_table, hash_value, hash_less, NULL);
   list_init (&t->file_mapping_table);
-  t->map_id = 0;
+  t->next_mapid = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
