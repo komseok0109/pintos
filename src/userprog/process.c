@@ -21,6 +21,8 @@
 
 #define MAX_ARGUMENTS 128
 
+#define MAX_ARGUMENTS 128
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 

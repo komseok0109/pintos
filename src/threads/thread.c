@@ -33,6 +33,10 @@ static struct list sleep_list;
 static int64_t next_tick_to_awake;
 int load_avg;
 
+static struct list sleep_list;
+static int64_t next_tick_to_awake;
+int load_avg;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -98,10 +102,14 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   list_init (&sleep_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
+  initial_thread->nice = NICE_DEFAULT;
+  initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
+
   initial_thread->nice = NICE_DEFAULT;
   initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
 
@@ -118,6 +126,8 @@ thread_start (void)
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
+
+  load_avg = LOAD_AVG_DEFAULT;
 
   load_avg = LOAD_AVG_DEFAULT;
 
@@ -228,6 +238,12 @@ thread_create (const char *name, int priority,
 
   thread_preemption(); 
 
+  if (thread_mlfqs){
+    recalculate_priority_foreach(t);
+  }
+
+  thread_preemption(); 
+
   return tid;
 }
 
@@ -263,6 +279,8 @@ thread_unblock (struct thread *t)
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
+  ASSERT (t->status == THREAD_BLOCKED); 
+  list_insert_ordered(&ready_list, &t->elem, compare_thread_prority, NULL);
   ASSERT (t->status == THREAD_BLOCKED); 
   list_insert_ordered(&ready_list, &t->elem, compare_thread_prority, NULL);
   t->status = THREAD_READY;
@@ -309,9 +327,12 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
-#ifdef USERPROG
-  process_exit ();
-#endif
+  #ifdef USERPROG
+    process_exit ();
+  #endif
+  #ifdef VM
+    spt_destroy(&thread_current()->spt);
+  #endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -334,6 +355,8 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+  if (cur != idle_thread)  
+      list_insert_ordered(&ready_list, &cur->elem, compare_thread_prority, NULL);
   if (cur != idle_thread)  
       list_insert_ordered(&ready_list, &cur->elem, compare_thread_prority, NULL);
   cur->status = THREAD_READY;
@@ -367,6 +390,11 @@ thread_set_priority (int new_priority)
   thread_current()->original_priority = new_priority;
   update_priority();
   thread_preemption(); 
+  if (thread_mlfqs) 
+    return;
+  thread_current()->original_priority = new_priority;
+  update_priority();
+  thread_preemption(); 
 }
 
 /* Returns the current thread's priority. */
@@ -385,12 +413,23 @@ thread_set_nice (int nice) {
   recalculate_priority_foreach(cur);
   thread_preemption(); 
   intr_set_level(old_level);
+thread_set_nice (int nice) {
+  enum intr_level old_level = intr_disable();
+  struct thread *cur = thread_current();
+  cur->nice = nice;
+  recalculate_priority_foreach(cur);
+  thread_preemption(); 
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
+  enum intr_level old_level = intr_disable();
+  int nice_value = thread_current()->nice;
+  intr_set_level(old_level);
+  return nice_value;
   enum intr_level old_level = intr_disable();
   int nice_value = thread_current()->nice;
   intr_set_level(old_level);
@@ -405,12 +444,20 @@ thread_get_load_avg (void)
   int scaled_load_avg = convert_fixed_to_int_nearest(fixed_multiply_int(load_avg, 100));
   intr_set_level (old_level);
   return scaled_load_avg;
+  enum intr_level old_level = intr_disable ();
+  int scaled_load_avg = convert_fixed_to_int_nearest(fixed_multiply_int(load_avg, 100));
+  intr_set_level (old_level);
+  return scaled_load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
+  enum intr_level old_level = intr_disable ();
+  int scaled_recent_cpu = convert_fixed_to_int_nearest(fixed_multiply_int(thread_current()->recent_cpu, 100));
+  intr_set_level (old_level);
+  return scaled_recent_cpu;
   enum intr_level old_level = intr_disable ();
   int scaled_recent_cpu = convert_fixed_to_int_nearest(fixed_multiply_int(thread_current()->recent_cpu, 100));
   intr_set_level (old_level);
@@ -502,6 +549,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+  if (!thread_mlfqs)
+    t->priority = priority;
   if (!thread_mlfqs)
     t->priority = priority;
   t->magic = THREAD_MAGIC;

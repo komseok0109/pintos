@@ -11,14 +11,25 @@
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "devices/input.h"
+#include "threads/vaddr.h"
+#include "userprog/process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "devices/shutdown.h"
+#include "threads/synch.h"
+#include "userprog/pagedir.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
+
+static struct lock fs_lock;
 
 static struct lock fs_lock;
 
 void
 syscall_init (void) 
 {
+  lock_init(&fs_lock);
   lock_init(&fs_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }

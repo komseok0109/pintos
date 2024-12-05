@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include <hash.h>
+#include "threads/synch.h"
+#include <hash.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -25,6 +27,12 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
+#define FD_TABLE_SIZE 128
 
 #define NICE_DEFAULT 0
 #define RECENT_CPU_DEFAULT 0
@@ -104,6 +112,13 @@ struct thread
     struct list_elem donator;
     int nice;
     int recent_cpu;
+    int64_t wakeup_tick; 
+    int original_priority;
+    struct list donations_list;
+    struct lock *waiting_lock;
+    struct list_elem donator;
+    int nice;
+    int recent_cpu;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -164,6 +179,11 @@ void thread_awake (int64_t current_tick);
 int get_next_tick_to_awake (void);
 bool compare_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
+void thread_sleep (int64_t wakeup_tick);
+void thread_awake (int64_t current_tick);
+int get_next_tick_to_awake (void);
+bool compare_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
@@ -176,6 +196,22 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+bool compare_thread_prority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_preemption(void);
+void nested_donation(struct lock *lock, struct thread* cur);
+void update_priority (void);
+bool compare_thread_donator_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void recalculate_priority_foreach(struct thread *t);
+void recalculate_priority(void);
+void increment_recent_cpu(void);
+void recalculate_recent_cpu_foreach(struct thread *t);
+void recalculate_recent_cpu(void);
+void recalculate_load_avg(void);
+
+int thread_add_file_to_fd_table (struct file *file);
+struct file *thread_get_file (int fd);
+void thread_remove_file_from_fd_table (int fd);
 bool compare_thread_prority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void thread_preemption(void);
 void nested_donation(struct lock *lock, struct thread* cur);
