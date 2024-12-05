@@ -87,13 +87,14 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_pointer_validity (args + 1);
       close(args[1]);
       break;
-    case SYS_CLOSE:
+    case SYS_MMAP:
       check_pointer_validity (args + 1);
-      close(args[1]);
+      check_pointer_validity (args + 2);
+      f->eax = mmap(args[1], args[2]);
       break;
-    case SYS_CLOSE:
+    case SYS_MUNMAP:
       check_pointer_validity (args + 1);
-      close(args[1]);
+      munmap(args[1]);
       break;
     default:
       exit(-1);
