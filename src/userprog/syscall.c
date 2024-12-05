@@ -87,6 +87,14 @@ syscall_handler (struct intr_frame *f UNUSED)
       check_pointer_validity (args + 1);
       close(args[1]);
       break;
+    case SYS_CLOSE:
+      check_pointer_validity (args + 1);
+      close(args[1]);
+      break;
+    case SYS_CLOSE:
+      check_pointer_validity (args + 1);
+      close(args[1]);
+      break;
     default:
       exit(-1);
   }
@@ -262,5 +270,73 @@ check_buffer_validity (const void *buffer, unsigned size) {
   char *ptr = (char *) buffer;
   for (unsigned i = 0; i < size; i++) {
     check_pointer_validity(ptr + i);
+  }
+}
+
+mapid_t mmap(int fd, void *addr) {
+  struct thread *cur = thread_current();
+
+  if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1) return -1;
+
+  struct file *file = file_reopen(fd_to_file(fd));
+  if (file == NULL || file_length(file) == 0) return -1;
+
+  size_t file_size = file_length(file);
+  size_t page_count = DIV_ROUND_UP(file_size, PGSIZE);
+
+  for (size_t i = 0; i < page_count; i++) {
+    void *page_addr = addr + i * PGSIZE;
+    if (pagedir_get_page(cur->pagedir, page_addr) != NULL)
+      return -1;
+  }
+
+  struct file_mapping *mapping = malloc(sizeof(struct file_mapping));
+  if (mapping == NULL) return -1;
+
+  mapping->mapid = cur->next_mapid++;
+  mapping->file = file;
+  mapping->start_addr = addr;
+  mapping->page_count = page_count;
+  list_push_back(&cur->file_mapping_table, &mapping->elem);
+
+  for (size_t i = 0; i < page_count; i++) {
+    size_t offset = i * PGSIZE;
+    size_t read_bytes = (file_size > offset + PGSIZE) ? PGSIZE : file_size - offset;
+    size_t zero_bytes = PGSIZE - read_bytes;
+    if (!spt_add_mmap_entry(addr + offset, file, offset, read_bytes, zero_bytes, true)) {
+      munmap(mapping->mapid); 
+      return -1;
+      }
+  }
+
+  return mapping->mapid;
+}
+
+void munmap(mapid_t mapping) {
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+
+  for (e = list_begin(&cur->file_mapping_table); e != list_end(&cur->file_mapping_table); e = list_next(e)) {
+    struct file_mapping *m = list_entry(e, struct file_mapping, elem);
+
+    if (m->mapid == mapping) {
+      for (size_t i = 0; i < m->page_count; i++) {
+        void *page_addr = m->start_addr + i * PGSIZE;
+        struct spt_entry *spte = spt_find_entry(&cur->spt, page_addr);
+
+        if (spte != NULL && pagedir_is_dirty(cur->pagedir, page_addr)) {
+          file_write_at(m->file, page_addr, spte->read_bytes, spte->file_offset);
+        }
+
+        free_frame(pagedir_get_page(cur->pagedir, page_addr));
+        pagedir_clear_page(cur->pagedir, page_addr);
+        spt_remove_entry(&cur->spt, spte);
+      }
+
+      file_close(m->file);
+      list_remove(&m->elem);
+      free(m);
+      return;
+    }
   }
 }

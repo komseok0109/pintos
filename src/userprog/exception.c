@@ -144,16 +144,42 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  exit(-1);
-
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
+  if (!not_present)
+   exit(-1);
+  
+  struct spt_entry *spte = spt_find_entry(fault_addr);
+  if (spte != NULL) {
+   if (spte->type == FILE) {
+      if (!load_page_lazy(spte)) 
+         exit(-1);
+   } 
+   else if (spte->type == MMAP) {
+      if (!load_page_mmap(spte)) 
+         exit(-1);
+   } 
+   else if (spte->type == SWAP) {
+      if (!swap_in(spte)) 
+         exit(-1);
+   } 
+   else 
+      exit(-1);
+   return;
+  }
+
+  if (is_stack_access(fault_addr, f->esp)) {
+   if (!grow_stack(fault_addr)) {
+      exit(-1);
+   }
+   return;
+  }
+
+  exit(-1); 
+
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",

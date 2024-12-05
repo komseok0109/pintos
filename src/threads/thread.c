@@ -12,9 +12,9 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixed-point.h"
-#ifdef USERPROG
 #include "userprog/process.h"
-#endif
+#include "vm/page.h"
+#include <hash.h>
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -517,6 +517,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->has_parent_waited = false;
   for (int i = 0; i < FD_TABLE_SIZE; i++)
     t->fd_table[i] = NULL;
+
+  hash_init (&t->s_page_table, hash_value, hash_less, NULL);
+  list_init (&t->file_mapping_table);
+  t->map_id = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

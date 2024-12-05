@@ -1,6 +1,7 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 #include <stdbool.h>
+#include <list.h>
 
 typedef int pid_t;
 
@@ -21,4 +22,19 @@ void close (int fd);
 
 void check_pointer_validity (const void* ptr);
 void check_buffer_validity (const void* buffer, unsigned size);
+
+typedef int mapid_t;
+
+struct file_mapping 
+{
+    mapid_t id;
+    struct file *file;
+    void* start_addr;
+    size_t page_count;
+    struct list_elem elem;
+}
+
+mapid_t mmap(int fd, void* addr);
+void munmap(mapid_t mapping);
+
 #endif /* userprog/syscall.h */
