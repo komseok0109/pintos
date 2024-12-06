@@ -9,7 +9,6 @@ struct frame
     void *frame_addr;
     struct spt_entry *page;
     struct list_elem elem;
-    struct thread *owner;
 };
 
 void frame_init(void);
