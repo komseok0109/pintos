@@ -126,68 +126,57 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-  bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write;        /* True: access was write, false: access was read. */
-  bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+  bool not_present;
+  bool write;
+  bool user;
+  void *fault_addr;
 
-  /* Obtain faulting address, the virtual address that was
-     accessed to cause the fault.  It may point to code or to
-     data.  It is not necessarily the address of the instruction
-     that caused the fault (that's f->eip).
-     See [IA32-v2a] "MOV--Move to/from Control Registers" and
-     [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
-     (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
-
-  /* Turn interrupts back on (they were only off so that we could
-     be assured of reading CR2 before it changed). */
-  intr_enable ();
-
-  /* Count page faults. */
+  intr_enable();
   page_fault_cnt++;
 
-  /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if (!not_present)
-   exit(-1);
-  
+  if (!not_present) {
+    printf("Rights violation at %p: %s access in %s context.\n",
+           fault_addr,
+           write ? "write" : "read",
+           user ? "user" : "kernel");
+    exit(-1);
+  }
+
   struct spt_entry *spte = find_spt_entry(fault_addr);
+  
   if (spte != NULL) {
-   if (spte->type == FILE) {
-      if (!load_page_lazy(spte)) 
-         exit(-1);
-   } 
-   else if (spte->type == MMAP) {
-      if (!load_page_mmap(spte)) 
-         exit(-1);
-   } 
-   else if (spte->type == SWAP) {
-      if (!swap_in(spte)) 
-         exit(-1);
-   } 
-   else 
-      exit(-1);
-   return;
+    switch (spte->type) {
+      case FILE:
+        if (!load_page_lazy(spte)) exit(-1);
+        break;
+      case MMAP:
+        if (!load_page_mmap(spte)) exit(-1);
+        break;
+      case SWAP:
+        if (!swap_in(spte)) exit(-1);
+        break;
+      default:
+        printf("Unknown SPT entry type for address %p.\n", fault_addr);
+        exit(-1);
+    }
+    return;
   }
 
   if (is_stack_access(fault_addr, f->esp)) {
-   if (!grow_stack(fault_addr)) {
+    if (!grow_stack(fault_addr)) {
+      printf("Stack growth failed at address %p.\n", fault_addr);
       exit(-1);
-   }
-   return;
+    }
+    return;
   }
 
-  exit(-1); 
-
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  printf("Page fault at %p: Unhandled case in %s context.\n",
+         fault_addr,
+         user ? "user" : "kernel");
+  exit(-1);
 }
-
