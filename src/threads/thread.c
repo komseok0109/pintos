@@ -330,7 +330,17 @@ thread_exit (void)
   #ifdef USERPROG
     process_exit ();
   #endif
+  #ifdef VM
+    struct hash *s_page_table = &thread_current()->s_page_table;
+    struct hash_iterator i;
 
+    hash_first(&i, s_page_table);
+    while (hash_next(&i))
+    {
+      struct spt_entry *entry = hash_entry(hash_cur(&i), struct spt_entry, elem);
+      delete_spt_entry(entry->vaddr);
+    }
+  #endif
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
