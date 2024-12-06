@@ -40,7 +40,12 @@ process_execute (const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = vm_get_frame (0);
+  struct frame *frame = vm_get_frame();
+  if (frame == NULL) {
+      PANIC("Failed to allocate frame!");
+  }
+  fn_copy = (char *)frame->frame_addr;
+
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
@@ -525,7 +530,11 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = vm_get_frame (PAL_USER | PAL_ZERO);
+  struct frame *frame = vm_get_frame();
+  if (frame == NULL) {
+      PANIC("Failed to allocate frame!");
+  }
+  kpage = (uint8_t *)frame->frame_addr;
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
