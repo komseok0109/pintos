@@ -364,8 +364,6 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread)  
       list_insert_ordered(&ready_list, &cur->elem, compare_thread_prority, NULL);
-  if (cur != idle_thread)  
-      list_insert_ordered(&ready_list, &cur->elem, compare_thread_prority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -392,11 +390,6 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_mlfqs) 
-    return;
-  thread_current()->original_priority = new_priority;
-  update_priority();
-  thread_preemption(); 
   if (thread_mlfqs) 
     return;
   thread_current()->original_priority = new_priority;
