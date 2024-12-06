@@ -6,8 +6,8 @@
 #include "vm/page.h"
 
 void swap_init(void);
-bool swap_out(struct spt_entry *spte);
-bool swap_in(struct spt_entry *spte);
+void swap_out(void* frame_addr, struct spt_entry* page);
+bool swap_in(struct spt_entry* page);
 void swap_free(size_t swap_slot_index);
 
 #endif /* vm/swap.h */

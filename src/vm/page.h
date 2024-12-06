@@ -10,16 +10,14 @@
 enum page_type {
   STACK,
   MMAP,
-  FILE,
-  SWAP
+  FILE
 };
 
 struct spt_entry 
 {
     struct thread* owner; 
-    void* vaddr; 
+    void* page; 
     enum page_type type; 
-    struct frame* f; 
     struct file* file;
     off_t offset; 
     size_t read_bytes; 
@@ -28,6 +26,7 @@ struct spt_entry
     bool writable; 
     bool pinning; 
     struct hash_elem elem; 
+    bool is_swapped;
 };
 
 unsigned hash_value (const struct hash_elem *e, void *aux UNUSED);
@@ -37,12 +36,12 @@ struct spt_entry *find_spt_entry(void* addr);
 void delete_spt_entry(void* addr);
 bool spt_add_file_entry(void* vaddr, struct file* file, off_t offset, size_t read_bytes, size_t zero_bytes, bool writable);
 bool spt_add_mmap_entry(void* vaddr, struct file* file, off_t offset, size_t read_bytes, size_t zero_bytes, bool writable); 
-bool spt_add_swap_entry(void *vaddr, size_t swap_index, bool writable);
 bool spt_add_stack_entry(void* vaddr); 
 bool load_page_mmap (struct spt_entry *spte);
 bool load_page_lazy (struct spt_entry *spte);
 bool is_stack_access(void *fault_addr, void *esp);
 bool grow_stack(void *fault_addr);
 bool install_page_ (void *upage, void *kpage, bool writable);
+void free_page(struct hash_elem *h, void* aux UNUSED);
 
 #endif
