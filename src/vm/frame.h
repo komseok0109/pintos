@@ -9,9 +9,11 @@ struct frame
     void *frame_addr;
     struct spt_entry *page;
     struct list_elem elem;
+    struct thread *owner;
 };
 
 void frame_init(void);
+struct frame *vm_get_frame(void);
 void *allocate_frame(struct spt_entry *page);
 void free_frame(void *frame_addr);
 void *evict_frame(void);
