@@ -22,7 +22,8 @@
 #include "threads/palloc.h"
 #include "threads/pte.h"
 #include "threads/thread.h"
-
+#include "vm/frame.h"
+#include "vm/swap.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/exception.h"
@@ -32,7 +33,6 @@
 #else
 #include "tests/threads/tests.h"
 #endif
-
 #ifdef FILESYS
 #include "devices/block.h"
 #include "devices/ide.h"
@@ -100,6 +100,8 @@ main (void)
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
+  frame_init();
+  swap_init();
 
   /* Segmentation. */
 #ifdef USERPROG
@@ -284,9 +286,7 @@ static void
 run_task (char **argv)
 {
   const char *task = argv[1];
-  struct thread *cur;
-  cur = thread_current ();
-  printf ("Current thread: %s\n", cur->name);
+  
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
   process_wait (process_execute (task));
