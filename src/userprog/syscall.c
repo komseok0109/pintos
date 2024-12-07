@@ -41,62 +41,42 @@ syscall_handler (struct intr_frame *f UNUSED)
       exit(args[1]);
       break;
     case SYS_EXEC:
-      check_pointer_validity (args + 1);
       f->eax = exec((const char*) args[1]);
       break;
     case SYS_WAIT:
-      check_pointer_validity (args + 1);
       f->eax = sys_wait((pid_t) args[1]);
       break;
     case SYS_CREATE:
-      check_pointer_validity (args + 1);
-      check_pointer_validity (args + 2);
       f->eax = create((const char*) args[1], (unsigned) args[2]);
       break;
     case SYS_REMOVE:
-      check_pointer_validity (args + 1);
       f->eax = remove((const char*) args[1]);
       break;
     case SYS_OPEN:
-      check_pointer_validity (args + 1);
       f->eax = open((const char*) args[1]);
       break;
     case SYS_FILESIZE:
-      check_pointer_validity (args + 1);
       f->eax = filesize(args[1]);
       break;
     case SYS_READ:
-      check_pointer_validity (args + 1);
-      check_pointer_validity (args + 2);
-      check_pointer_validity (args + 3);
       f->eax = read(args[1], (void*) args[2], (unsigned) args[3]);
       break;
     case SYS_WRITE:
-      check_pointer_validity (args + 1);
-      check_pointer_validity (args + 2);
-      check_pointer_validity (args + 3);
       f->eax = write(args[1], (const void*) args[2], (unsigned) args[3]);
       break;
     case SYS_SEEK:
-      check_pointer_validity (args + 1);
-      check_pointer_validity (args + 2);
       seek(args[1], (unsigned) args[2]);
       break;
     case SYS_TELL:
-      check_pointer_validity (args + 1);
       f->eax = tell(args[1]);
       break;
     case SYS_CLOSE:
-      check_pointer_validity (args + 1);
       close(args[1]);
       break;
     case SYS_MMAP:
-      check_pointer_validity (args + 1);
-      check_pointer_validity (args + 2);
       f->eax = mmap(args[1], (void*) args[2]);
       break;
     case SYS_MUNMAP:
-      check_pointer_validity (args + 1);
       munmap(args[1]);
       break;
     default:
@@ -158,7 +138,14 @@ remove (const char *file) {
   check_pointer_validity(file);
   bool success;
   lock_acquire(&fs_lock);
-  success = filesys_remove(file); 
+  struct file *f = filesys_open (file);
+  if (f == NULL)
+    success = false;
+  else
+  {
+      file_close (f);
+      success = filesys_remove (file);
+  }
   lock_release(&fs_lock);
   return success;
 }
@@ -258,8 +245,13 @@ close (int fd) {
   lock_acquire(&fs_lock);
   struct file *f = thread_get_file(fd);
   if (f != NULL) {
-    file_close(f);
+    struct spt_entry temp_entry;
+    temp_entry.file = f;
+    struct hash_elem *e = hash_find(thread_current()->s_page_table, &temp_entry.elem);
+    if (e != NULL) 
+      load_page_mmap(hash_entry(e, struct spt_entry, elem));  
     thread_remove_file_from_fd_table(fd);
+    file_close(f);
   }
   lock_release(&fs_lock);
 }
@@ -280,16 +272,19 @@ check_buffer_validity (const void *buffer, unsigned size) {
 
 mapid_t mmap(int fd, void *addr) {
   if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1) return -1;
-  check_pointer_validity(addr);
+  if(!is_user_vaddr(addr)) return -1;
 
   struct thread *cur = thread_current();
 
+  lock_acquire(&fs_lock);
   struct file *file = file_reopen(thread_get_file(fd));
-  if (file == NULL || file_length(file) == 0) return -1;
-
+  if (file == NULL || file_length(file) == 0) {
+    lock_release(&fs_lock);
+    return -1;
+  }
+  lock_release(&fs_lock);
   size_t file_size = file_length(file);
   size_t page_count = DIV_ROUND_UP(file_size, PGSIZE);
-
   for (size_t i = 0; i < page_count; i++) {
     void *page_addr = addr + i * PGSIZE;
     if (find_spt_entry(page_addr) != NULL)
