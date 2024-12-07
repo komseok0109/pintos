@@ -19,12 +19,9 @@ static void syscall_handler (struct intr_frame *);
 
 static struct lock fs_lock;
 
-static struct lock fs_lock;
-
 void
 syscall_init (void) 
 {
-  lock_init(&fs_lock);
   lock_init(&fs_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
@@ -189,8 +186,9 @@ filesize (int fd) {
   return length;
 }
 
-int 
-read (int fd, void *buffer, unsigned size) {
+int
+read (int fd, void *buffer, unsigned size)
+{
   if (fd < 0 || buffer == NULL)
     return -1;
   
