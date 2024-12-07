@@ -195,7 +195,6 @@ page_fault (struct intr_frame *f)
     }
   }
 
-
   exit(-1); 
 
   printf ("Page fault at %p: %s error %s page in %s context.\n",
