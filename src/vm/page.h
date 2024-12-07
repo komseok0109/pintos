@@ -10,7 +10,8 @@
 enum page_type {
   STACK,
   MMAP,
-  FILE
+  FILE,
+  SWAP
 };
 
 struct spt_entry 
