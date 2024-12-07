@@ -8,6 +8,7 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 #include "vm/frame.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -152,7 +153,12 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  if (!is_user_vaddr(fault_addr) || fault_addr == NULL) {
+    exit(-1);
+  }
+
   if (not_present && user) {
+    void *page_addr = pg_round_down(fault_addr);  // 페이지 시작 주소 계산
    struct spt_entry *spte = find_spt_entry(fault_addr);
    if (spte != NULL) {
       if (spte->is_swapped == true) {
@@ -176,6 +182,17 @@ page_fault (struct intr_frame *f)
       }
       return;
    }
+
+   if (!write && is_user_vaddr(fault_addr)) {
+      uint8_t *kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+      if (kpage != NULL) {
+        if (pagedir_set_page(thread_current()->pagedir, page_addr, 
+                            kpage, true)) {
+          return;
+        }
+        palloc_free_page(kpage);
+      }
+    }
   }
 
 
@@ -188,4 +205,3 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 }
-

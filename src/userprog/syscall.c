@@ -264,9 +264,31 @@ check_pointer_validity (const void* ptr){
 
 void 
 check_buffer_validity (const void *buffer, unsigned size) {
-  char *ptr = (char *) buffer;
-  for (unsigned i = 0; i < size; i++) {
-    check_pointer_validity(ptr + i);
+  if (buffer == NULL || !is_user_vaddr(buffer))
+    exit(-1);
+
+  if (size == 0)
+    return;
+
+  void *end_addr = buffer + size - 1;
+  if (!is_user_vaddr(end_addr))
+    exit(-1);
+
+  void *start = pg_round_down(buffer);
+  void *end = pg_round_down(end_addr);
+  
+  // 각 페이지에 대해 처리
+  for (void *addr = start; addr <= end; addr += PGSIZE) {
+    // 페이지가 매핑되어 있지 않으면 새로 할당
+    if (pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
+      void *kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+      if (kpage == NULL || 
+          !pagedir_set_page(thread_current()->pagedir, addr, kpage, true)) {
+        if (kpage != NULL)
+          palloc_free_page(kpage);
+        exit(-1);
+      }
+    }
   }
 }
 
