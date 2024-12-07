@@ -12,9 +12,10 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixed-point.h"
+#ifdef USERPROG
 #include "userprog/process.h"
+#endif
 #include "vm/page.h"
-#include <hash.h>
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -28,10 +29,6 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
-
-static struct list sleep_list;
-static int64_t next_tick_to_awake;
-int load_avg;
 
 static struct list sleep_list;
 static int64_t next_tick_to_awake;
@@ -102,14 +99,10 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   list_init (&sleep_list);
-  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
-  initial_thread->nice = NICE_DEFAULT;
-  initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
-
   initial_thread->nice = NICE_DEFAULT;
   initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
 
@@ -126,8 +119,6 @@ thread_start (void)
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
-
-  load_avg = LOAD_AVG_DEFAULT;
 
   load_avg = LOAD_AVG_DEFAULT;
 
@@ -210,9 +201,10 @@ thread_create (const char *name, int priority,
     t->recent_cpu = parent->recent_cpu;
   }
 
-  t->parent = parent;
-  list_push_back(&parent->children, &t->child);
-
+  #ifdef USERPROG
+    t->parent = parent;
+    list_push_back(&parent->children, &t->child);
+  #endif 
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -231,12 +223,6 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
-  if (thread_mlfqs){
-    recalculate_priority_foreach(t);
-  }
-
-  thread_preemption(); 
 
   if (thread_mlfqs){
     recalculate_priority_foreach(t);
@@ -279,8 +265,6 @@ thread_unblock (struct thread *t)
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
-  ASSERT (t->status == THREAD_BLOCKED); 
-  list_insert_ordered(&ready_list, &t->elem, compare_thread_prority, NULL);
   ASSERT (t->status == THREAD_BLOCKED); 
   list_insert_ordered(&ready_list, &t->elem, compare_thread_prority, NULL);
   t->status = THREAD_READY;
@@ -327,9 +311,9 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
-  #ifdef USERPROG
-    process_exit ();
-  #endif
+#ifdef USERPROG
+  process_exit ();
+#endif
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -352,8 +336,6 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread)  
-      list_insert_ordered(&ready_list, &cur->elem, compare_thread_prority, NULL);
   if (cur != idle_thread)  
       list_insert_ordered(&ready_list, &cur->elem, compare_thread_prority, NULL);
   cur->status = THREAD_READY;
@@ -382,11 +364,6 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_mlfqs) 
-    return;
-  thread_current()->original_priority = new_priority;
-  update_priority();
-  thread_preemption(); 
   if (thread_mlfqs) 
     return;
   thread_current()->original_priority = new_priority;
@@ -529,25 +506,23 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   if (!thread_mlfqs)
     t->priority = priority;
-  if (!thread_mlfqs)
-    t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->original_priority = priority;
   list_init(&t->donations_list);
   t->waiting_lock = NULL;
 
-  list_init(&t->children);
-  sema_init(&t->load_sema, 0);
-  sema_init(&t->wait_sema, 0);
-  sema_init(&t->synch_sema, 0);
-  t->is_child_loaded = false;
-  t->has_parent_waited = false;
-  for (int i = 0; i < FD_TABLE_SIZE; i++)
-    t->fd_table[i] = NULL;
+  #ifdef USERPROG
+    list_init(&t->children);
+    sema_init(&t->load_sema, 0);
+    sema_init(&t->wait_sema, 0);
+    sema_init(&t->synch_sema, 0);
+    t->is_child_loaded = false;
+    t->has_parent_waited = false;
+    for (int i = 0; i < FD_TABLE_SIZE; i++)
+      t->fd_table[i] = NULL;
+  #endif
 
-  hash_init (&t->s_page_table, hash_value, hash_less, NULL);
-  list_init (&t->file_mapping_table);
-  t->next_mapid = 0;
+  list_init(&t->file_mapping_table);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

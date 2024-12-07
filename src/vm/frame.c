@@ -21,7 +21,8 @@ frame_init(void)
 void *
 allocate_frame(enum palloc_flags flags, void* page) 
 {
-  lock_acquire(&frame_table_lock);
+  if (!lock_held_by_current_thread (&frame_table_lock))
+    lock_acquire(&frame_table_lock);
   struct frame *f = malloc(sizeof(struct frame));
   if (f == NULL) {
     lock_release(&frame_table_lock);
@@ -44,7 +45,8 @@ allocate_frame(enum palloc_flags flags, void* page)
 void 
 free_frame(void *addr) 
 {
-  lock_acquire(&frame_table_lock);
+  if (!lock_held_by_current_thread (&frame_table_lock))
+    lock_acquire(&frame_table_lock);
   struct list_elem *e;
   for (e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
     struct frame *f = list_entry(e, struct frame, elem);
@@ -61,7 +63,8 @@ free_frame(void *addr)
 
 void *
 find_frame(void* page){
-  lock_acquire(&frame_table_lock);
+  if (!lock_held_by_current_thread (&frame_table_lock))
+    lock_acquire(&frame_table_lock);
   struct list_elem *e;
   for (e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
     struct frame *f = list_entry(e, struct frame, elem);

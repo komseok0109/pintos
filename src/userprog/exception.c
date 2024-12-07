@@ -152,34 +152,32 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if (!not_present)
-   exit(-1);
-  
-  struct spt_entry *spte = find_spt_entry(fault_addr);
-  if (spte != NULL) {
-   if (spte->type == FILE) {
-      if (!load_page_lazy(spte)) 
+  if (not_present && user) {
+   struct spt_entry *spte = find_spt_entry(fault_addr);
+   if (spte != NULL) {
+      if (spte->is_swapped == true) {
+         if (!swap_in(spte)) 
+            exit(-1);
+      } 
+      else if (spte->type == MMAP) {
+         if (!load_page_mmap(spte)) 
+            exit(-1);
+      }     
+      else if (spte->type == FILE) {
+         if (!load_page_lazy(spte)) 
+            exit(-1);
+      } 
+      return;
+   }
+
+   if (is_stack_access(fault_addr, f->esp)) {
+      if (!grow_stack(fault_addr)) {
          exit(-1);
-   } 
-   else if (spte->type == MMAP) {
-      if (!load_page_mmap(spte)) 
-         exit(-1);
-   } 
-   else if (spte->type == SWAP) {
-      if (!swap_in(spte)) 
-         exit(-1);
-   } 
-   else 
-      exit(-1);
-   return;
+      }
+      return;
+   }
   }
 
-  if (is_stack_access(fault_addr, f->esp)) {
-   if (!grow_stack(fault_addr)) {
-      exit(-1);
-   }
-   return;
-  }
 
   exit(-1); 
 

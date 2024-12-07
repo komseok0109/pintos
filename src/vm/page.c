@@ -165,7 +165,7 @@ bool load_page_lazy (struct spt_entry *spte){
 }
 
 bool is_stack_access(void *fault_addr, void *esp) {
-    return (fault_addr > PHYS_BASE - STACK_LIMIT && esp - 32 < fault_addr);
+    return (fault_addr >= PHYS_BASE - STACK_LIMIT && esp - 32 <= fault_addr);
 }
 
 bool grow_stack(void *addr) {

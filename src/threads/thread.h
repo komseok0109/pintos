@@ -33,12 +33,6 @@ typedef int tid_t;
 
 #define FD_TABLE_SIZE 128
 
-#define NICE_DEFAULT 0
-#define RECENT_CPU_DEFAULT 0
-#define LOAD_AVG_DEFAULT 0
-
-#define FD_TABLE_SIZE 128
-
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -115,6 +109,7 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
+     
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
@@ -133,8 +128,7 @@ struct thread
     struct file *exec_file;
     struct file *fd_table[FD_TABLE_SIZE];
 
-    struct hash s_page_table;
-
+    struct hash *s_page_table;
     struct list file_mapping_table;
     mapid_t next_mapid;
 
@@ -171,11 +165,6 @@ void thread_awake (int64_t current_tick);
 int get_next_tick_to_awake (void);
 bool compare_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
-void thread_sleep (int64_t wakeup_tick);
-void thread_awake (int64_t current_tick);
-int get_next_tick_to_awake (void);
-bool compare_wakeup_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
@@ -188,22 +177,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-bool compare_thread_prority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void thread_preemption(void);
-void nested_donation(struct lock *lock, struct thread* cur);
-void update_priority (void);
-bool compare_thread_donator_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-
-void recalculate_priority_foreach(struct thread *t);
-void recalculate_priority(void);
-void increment_recent_cpu(void);
-void recalculate_recent_cpu_foreach(struct thread *t);
-void recalculate_recent_cpu(void);
-void recalculate_load_avg(void);
-
-int thread_add_file_to_fd_table (struct file *file);
-struct file *thread_get_file (int fd);
-void thread_remove_file_from_fd_table (int fd);
 bool compare_thread_prority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void thread_preemption(void);
 void nested_donation(struct lock *lock, struct thread* cur);

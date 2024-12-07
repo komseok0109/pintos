@@ -281,9 +281,10 @@ check_buffer_validity (const void *buffer, unsigned size) {
 }
 
 mapid_t mmap(int fd, void *addr) {
-  struct thread *cur = thread_current();
-
   if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1) return -1;
+  check_pointer_validity(addr);
+
+  struct thread *cur = thread_current();
 
   struct file *file = file_reopen(thread_get_file(fd));
   if (file == NULL || file_length(file) == 0) return -1;
@@ -293,7 +294,7 @@ mapid_t mmap(int fd, void *addr) {
 
   for (size_t i = 0; i < page_count; i++) {
     void *page_addr = addr + i * PGSIZE;
-    if (pagedir_get_page(cur->pagedir, page_addr) != NULL)
+    if (find_spt_entry(page_addr) != NULL)
       return -1;
   }
 
@@ -315,7 +316,6 @@ mapid_t mmap(int fd, void *addr) {
       return -1;
       }
   }
-
   return mapping->mapid;
 }
 
@@ -331,12 +331,12 @@ void munmap(mapid_t mapping) {
         void *page_addr = m->start_addr + i * PGSIZE;
         struct spt_entry *spte = find_spt_entry(page_addr);
 
-        if (spte != NULL && pagedir_is_dirty(cur->pagedir, page_addr)) {
-          file_write_at(m->file, page_addr, spte->read_bytes, spte->offset);
+        if (spte != NULL && pagedir_is_dirty(cur->pagedir, spte->page)) {
+          file_write_at(m->file, spte->page, spte->read_bytes, spte->offset);
         }
 
-        free_frame(pagedir_get_page(cur->pagedir, page_addr));
-        pagedir_clear_page(cur->pagedir, page_addr);
+        free_frame(pagedir_get_page(cur->pagedir, spte->page));
+        pagedir_clear_page(cur->pagedir, spte->page);
         delete_spt_entry(spte);
       }
 
