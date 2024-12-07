@@ -202,10 +202,12 @@ read (int fd, void *buffer, unsigned size)
 
 int 
 write (int fd, const void *buffer, unsigned size) {
-  if (fd < 0 || buffer == NULL)
+  if (fd < 0)
     return -1;
+
   check_buffer_validity(buffer, size);
-  int bytes_written;
+
+  int bytes_written = 0;
 
   lock_acquire(&fs_lock);
   if (fd == STDOUT_FILENO) {
@@ -264,17 +266,18 @@ check_pointer_validity (const void* ptr){
 
 void 
 check_buffer_validity (const void *buffer, unsigned size) {
+  // 버퍼 자체가 NULL이면 즉시 종료
   if (buffer == NULL)
     exit(-1);
 
-  if (!is_user_vaddr(buffer) || (uint32_t)buffer < 0x08048000)  
-    exit(-1);
-
-  if (size == 0)
+  // size가 0이면 버퍼 포인터만 검증
+  if (size == 0) {
+    check_pointer_validity(buffer);
     return;
+  }
 
   void *end_addr = buffer + size - 1;
-  if (!is_user_vaddr(end_addr) || (uint32_t)end_addr >= PHYS_BASE)
+  if (!is_user_vaddr(buffer) || !is_user_vaddr(end_addr) || (uint32_t)end_addr >= PHYS_BASE)
     exit(-1);
 
   void *start = pg_round_down(buffer);
@@ -294,6 +297,13 @@ check_buffer_validity (const void *buffer, unsigned size) {
     }
   }
 }
+
+
+
+
+
+
+
 
 mapid_t mmap(int fd, void *addr) {
   if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1) return -1;
