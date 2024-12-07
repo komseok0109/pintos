@@ -264,14 +264,17 @@ check_pointer_validity (const void* ptr){
 
 void 
 check_buffer_validity (const void *buffer, unsigned size) {
-  if (buffer == NULL || !is_user_vaddr(buffer))
+  if (buffer == NULL)
+    exit(-1);
+
+  if (!is_user_vaddr(buffer) || (uint32_t)buffer < 0x08048000)  
     exit(-1);
 
   if (size == 0)
     return;
 
   void *end_addr = buffer + size - 1;
-  if (!is_user_vaddr(end_addr))
+  if (!is_user_vaddr(end_addr) || (uint32_t)end_addr >= PHYS_BASE)
     exit(-1);
 
   void *start = pg_round_down(buffer);
