@@ -29,7 +29,7 @@ hash_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNU
 bool 
 add_spt_entry(struct spt_entry *p)
 {
-  return hash_insert(&thread_current()->s_page_table, &p->elem) == NULL;
+  return hash_insert(thread_current()->s_page_table, &p->elem) == NULL;
 }
 
 struct spt_entry *
@@ -37,7 +37,7 @@ find_spt_entry(void* addr)
 {
   struct spt_entry temp_entry;
   temp_entry.page = pg_round_down(addr);
-  struct hash_elem *e = hash_find(&thread_current()->s_page_table, &temp_entry.elem);
+  struct hash_elem *e = hash_find(thread_current()->s_page_table, &temp_entry.elem);
   if (e == NULL) {
     return NULL; 
   }
@@ -49,10 +49,10 @@ delete_spt_entry(void* addr)
 {
   struct spt_entry temp_entry;
   temp_entry.page = addr;
-  struct hash_elem *e = hash_find(&thread_current()->s_page_table, &temp_entry.elem);
+  struct hash_elem *e = hash_find(thread_current()->s_page_table, &temp_entry.elem);
   if (e != NULL) {
     struct spt_entry *entry = hash_entry(e, struct spt_entry, elem);
-    hash_delete(&thread_current()->s_page_table, &entry->elem);
+    hash_delete(thread_current()->s_page_table, &entry->elem);
     free(entry);  
   }   
 }
