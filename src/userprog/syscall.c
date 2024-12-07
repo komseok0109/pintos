@@ -205,6 +205,12 @@ write (int fd, const void *buffer, unsigned size) {
   if (fd < 0)
     return -1;
 
+  if (buffer == NULL || !is_user_vaddr(buffer))
+    exit(-1);
+    
+  if (pagedir_get_page(thread_current()->pagedir, buffer) == NULL)
+    exit(-1);
+
   check_buffer_validity(buffer, size);
 
   int bytes_written = 0;
@@ -266,26 +272,20 @@ check_pointer_validity (const void* ptr){
 
 void 
 check_buffer_validity (const void *buffer, unsigned size) {
-  // 버퍼 자체가 NULL이면 즉시 종료
-  if (buffer == NULL)
+  if (buffer == NULL || !is_user_vaddr(buffer))
     exit(-1);
 
-  // size가 0이면 버퍼 포인터만 검증
-  if (size == 0) {
-    check_pointer_validity(buffer);
+  if (size == 0)
     return;
-  }
 
   void *end_addr = buffer + size - 1;
-  if (!is_user_vaddr(buffer) || !is_user_vaddr(end_addr) || (uint32_t)end_addr >= PHYS_BASE)
+  if (!is_user_vaddr(end_addr) || end_addr < buffer)  // overflow 체크
     exit(-1);
 
   void *start = pg_round_down(buffer);
   void *end = pg_round_down(end_addr);
   
-  // 각 페이지에 대해 처리
   for (void *addr = start; addr <= end; addr += PGSIZE) {
-    // 페이지가 매핑되어 있지 않으면 새로 할당
     if (pagedir_get_page(thread_current()->pagedir, addr) == NULL) {
       void *kpage = palloc_get_page(PAL_USER | PAL_ZERO);
       if (kpage == NULL || 
@@ -297,10 +297,6 @@ check_buffer_validity (const void *buffer, unsigned size) {
     }
   }
 }
-
-
-
-
 
 
 
