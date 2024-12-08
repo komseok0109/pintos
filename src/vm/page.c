@@ -123,6 +123,7 @@ bool spt_add_stack_entry(void *vaddr) {
 }
 
 bool load_page_mmap (struct spt_entry *spte){
+  spte->pinning = true;
   void *frame = allocate_frame(PAL_USER|PAL_ZERO, spte->page);
 
   if (frame == NULL) 
