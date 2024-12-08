@@ -199,5 +199,7 @@ void free_page(struct hash_elem *h, void* aux UNUSED) {
   void * f = find_frame(spte->page); 
   if (f != NULL)
     free_frame(f);
+  if (spte->type == SWAP)
+    swap_free(spte->swap_index);
   free(spte);
 }
