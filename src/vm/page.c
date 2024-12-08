@@ -23,7 +23,8 @@ hash_value (const struct hash_elem *a, void *aux UNUSED)
 bool
 hash_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED)
 {
-  return hash_entry (a, struct spt_entry, elem)->page < hash_entry (b, struct spt_entry, elem)->page;
+  return ((uintptr_t) hash_entry (a, struct spt_entry, elem)->page) >> PGBITS < 
+                      ((uintptr_t) hash_entry (b, struct spt_entry, elem)->page) >> PGBITS;
 }
 
 bool 

@@ -182,23 +182,8 @@ read (int fd, void *buffer, unsigned size)
   if (fd < 0 || buffer == NULL)
     return -1;
   check_buffer_validity(buffer, size);
-  // for (unsigned i = 0; i < size; i++) {
-  //   if (buffer + i == NULL || !is_user_vaddr(buffer + i))
-  //     exit(-1);
-  // }
 
   int bytes_read;
-  // void *buffer_rd = pg_round_down(buffer);
-  // void *buffer_page;
-
-  // unsigned readsize = (unsigned) (buffer_rd + PGSIZE - buffer);
-
-  // for (buffer_page = buffer_rd; buffer_page <= buffer+size; buffer_page += PGSIZE){
-  //     struct s_page_table_entry *spte = find_spt_entry(buffer_page);
-  //     if (!spte) {
-  //       grow_stack(buffer_page);
-  //     }
-  // }
   if (!lock_held_by_current_thread (&fs_lock)){
     lock_acquire(&fs_lock);
   }
