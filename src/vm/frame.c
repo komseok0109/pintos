@@ -63,17 +63,13 @@ free_frame(void *addr)
 
 void *
 find_frame(void* page){
-  if (!lock_held_by_current_thread (&frame_table_lock))
-    lock_acquire(&frame_table_lock);
   struct list_elem *e;
   for (e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
     struct frame *f = list_entry(e, struct frame, elem);
     if (f->page == page) {
-        lock_release(&frame_table_lock);
         return page;
     }
   }
-  lock_release(&frame_table_lock);
   return NULL;
 }
 
@@ -81,6 +77,12 @@ void
 evict_frame(void) 
 {
   struct frame *victim = choose_victim_clock();
+  struct spt_entry *spte = find_spt_entry(victim->page);
+  while (spte->pinning == true){
+    victim = choose_victim_clock();
+    spte = find_spt_entry(victim->page);
+  }
+  spte->pinning = true;
   swap_out(victim->frame_addr, find_spt_entry(victim->page));  
   pagedir_clear_page(victim->owner->pagedir, victim->page);
   palloc_free_page(victim->frame_addr);

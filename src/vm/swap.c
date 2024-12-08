@@ -42,7 +42,9 @@ swap_out(void* frame_addr, struct spt_entry* page) {
     }
     lock_release(&swap_lock); 
     page->swap_index = slot_index;
-    page->is_swapped = true;
+    page->memory = false;
+    page->pinning = false;
+    page->type = SWAP;
 }
 
 bool
@@ -56,7 +58,8 @@ swap_in(struct spt_entry *spte) {
         return false;
     }
     lock_acquire(&swap_lock);
-    spte->is_swapped = false;
+    spte->memory = true;
+    spte->type = FILE;
     size_t i;
     for (i = 0; i < SECTORS_PER_PAGE; i++)
         block_read (swap_block, spte->swap_index * SECTORS_PER_PAGE + i, frame + i * BLOCK_SECTOR_SIZE);

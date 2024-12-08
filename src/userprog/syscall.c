@@ -181,8 +181,8 @@ read (int fd, void *buffer, unsigned size)
   
   int bytes_read;
   check_buffer_validity(buffer, size);
-  
-  lock_acquire(&fs_lock);
+  if (!lock_held_by_current_thread (&fs_lock))
+    lock_acquire(&fs_lock);
   if (fd == STDIN_FILENO) {
     unsigned i;
     for (i = 0; i < size; i++) {

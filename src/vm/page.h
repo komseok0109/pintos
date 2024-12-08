@@ -10,7 +10,9 @@
 enum page_type {
   STACK,
   MMAP,
-  FILE
+  FILE,
+  SWAP,
+  LOAD
 };
 
 struct spt_entry 
@@ -26,7 +28,7 @@ struct spt_entry
     bool writable; 
     bool pinning; 
     struct hash_elem elem; 
-    bool is_swapped;
+    bool memory;
 };
 
 unsigned hash_value (const struct hash_elem *e, void *aux UNUSED);

@@ -69,8 +69,9 @@ spt_add_file_entry(void* vaddr, struct file* file, off_t offset, size_t read_byt
   spte->read_bytes = read_bytes;
   spte->zero_bytes = zero_bytes;
   spte->writable = writable;
-  spte->is_swapped = false;
-  spte->type = FILE;
+  spte->memory = false;
+  spte->pinning = false;
+  spte->type = LOAD;
 
   if (!add_spt_entry(spte)) {
     free(spte);
@@ -91,7 +92,8 @@ bool spt_add_mmap_entry(void* vaddr, struct file* file, off_t offset, size_t rea
   spte->zero_bytes = zero_bytes;
   spte->writable = writable;
   spte->type = MMAP;
-  spte->is_swapped = false;
+  spte->memory = false;
+  spte->pinning = false;
 
   if (!add_spt_entry(spte)) {
     free(spte);
@@ -110,8 +112,9 @@ bool spt_add_stack_entry(void *vaddr) {
   spte->page = vaddr;
   spte->writable = true;
   spte->owner = thread_current();
-  spte->is_swapped = false;
+  spte->memory = false;
   spte->type = STACK;
+  spte->pinning = false;
 
   if (!add_spt_entry(spte)) {
     free(spte);
@@ -140,11 +143,13 @@ bool load_page_mmap (struct spt_entry *spte){
     free_frame(frame);
     return false; 
   }   
-  spte->is_swapped = false;
+  spte->memory = true;
+  spte->pinning = false;
   return true;
 }
 
 bool load_page_lazy (struct spt_entry *spte){
+  spte->pinning = true;
   enum palloc_flags flags = spte->zero_bytes == PGSIZE ? PAL_USER | PAL_ZERO : PAL_USER;
   uint8_t* frame = allocate_frame(flags, spte->page);
   if (frame == NULL) return false;
@@ -160,7 +165,7 @@ bool load_page_lazy (struct spt_entry *spte){
     free_frame(frame);
     return false; 
   }   
-  spte->is_swapped = false;
+  spte->memory = true;
   return true;
 }
 
@@ -207,6 +212,5 @@ void free_page(struct hash_elem *h, void* aux UNUSED) {
   void * f = find_frame(spte->page); 
   if (f != NULL)
     free_frame(f);
-  swap_free(spte->swap_index);
   free(spte);
 }

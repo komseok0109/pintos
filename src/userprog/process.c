@@ -182,6 +182,18 @@ process_exit (void)
       file_close(cur->exec_file);
       cur->exec_file = NULL;
   }
+  struct list_elem* e;
+  for (e = list_begin (&cur->file_mapping_table); e != list_end (&cur->file_mapping_table);
+       e = list_next(e)) 
+  {
+      struct file_mapping* f = list_entry (e, struct file_mapping, elem);
+      munmap(f->mapid);
+  }
+
+  struct hash *h = thread_current ()->s_page_table;
+  if (h != NULL)
+    hash_destroy (h, free_page);
+  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
