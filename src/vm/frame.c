@@ -83,11 +83,10 @@ evict_frame(void)
     spte = find_spt_entry(victim->page);
   }
   spte->pinning = true;
-  swap_out(victim->frame_addr, find_spt_entry(victim->page));  
+  swap_out(spte);  
   pagedir_clear_page(victim->owner->pagedir, victim->page);
   palloc_free_page(victim->frame_addr);
   list_remove(&victim->elem);
-  free(victim);
 }
 
 struct frame *

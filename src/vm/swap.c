@@ -7,6 +7,7 @@
 #include "vm/page.h"
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "userprog/process.h"
 
 #define SECTORS_PER_PAGE (PGSIZE / BLOCK_SECTOR_SIZE)
 
@@ -23,14 +24,11 @@ void swap_init(void)
     else {
         swap_table = bitmap_create(block_size(swap_block) / SECTORS_PER_PAGE);
     }
-    if (swap_table == NULL) {
-        PANIC("Failed to create swap table");
-    }
     lock_init(&swap_lock);
 }
 
 void
-swap_out(void* frame_addr, struct spt_entry* page) {
+swap_out(struct spt_entry* page) {
     lock_acquire(&swap_lock);
     size_t slot_index = bitmap_scan_and_flip(swap_table, 0, 1, false);
     if (slot_index == BITMAP_ERROR) {
@@ -38,11 +36,10 @@ swap_out(void* frame_addr, struct spt_entry* page) {
     }
     size_t i;
     for (i = 0; i < SECTORS_PER_PAGE; i++){
-        block_write(swap_block, slot_index * SECTORS_PER_PAGE + i, (uint8_t *) frame_addr + i * BLOCK_SECTOR_SIZE );
+        block_write(swap_block, slot_index * SECTORS_PER_PAGE + i, (uint8_t *) page->page + i * BLOCK_SECTOR_SIZE );
     }
     lock_release(&swap_lock); 
     page->swap_index = slot_index;
-    page->memory = false;
     page->pinning = false;
     page->type = SWAP;
 }
@@ -53,16 +50,15 @@ swap_in(struct spt_entry *spte) {
     if (frame == NULL) {
         return false;
     }
-    if (!install_page_(spte->page, frame, true)) {
+    if (!install_page(spte->page, frame, true)) {
         free_frame(frame);
         return false;
     }
     lock_acquire(&swap_lock);
-    spte->memory = true;
     spte->type = FILE;
     size_t i;
     for (i = 0; i < SECTORS_PER_PAGE; i++)
-        block_read (swap_block, spte->swap_index * SECTORS_PER_PAGE + i, frame + i * BLOCK_SECTOR_SIZE);
+        block_read (swap_block, spte->swap_index * SECTORS_PER_PAGE + i, spte->page + i * BLOCK_SECTOR_SIZE);
     bitmap_reset (swap_table, spte->swap_index);
     lock_release(&swap_lock);
     return true;

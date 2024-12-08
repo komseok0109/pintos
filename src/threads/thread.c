@@ -523,6 +523,7 @@ init_thread (struct thread *t, const char *name, int priority)
   #endif
 
   list_init(&t->file_mapping_table);
+  t->next_mapid = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

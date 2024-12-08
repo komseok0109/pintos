@@ -28,7 +28,6 @@ struct spt_entry
     bool writable; 
     bool pinning; 
     struct hash_elem elem; 
-    bool memory;
 };
 
 unsigned hash_value (const struct hash_elem *e, void *aux UNUSED);
@@ -43,7 +42,6 @@ bool load_page_mmap (struct spt_entry *spte);
 bool load_page_lazy (struct spt_entry *spte);
 bool is_stack_access(void *fault_addr, void *esp);
 bool grow_stack(void *fault_addr);
-bool install_page_ (void *upage, void *kpage, bool writable);
 void free_page(struct hash_elem *h, void* aux UNUSED);
 
 #endif

@@ -15,15 +15,15 @@
 #define STACK_LIMIT (8 * 1024 * 1024)
 
 unsigned
-hash_value (const struct hash_elem *e, void *aux UNUSED)
+hash_value (const struct hash_elem *a, void *aux UNUSED)
 {
-  return ((uintptr_t) hash_entry (e, struct spt_entry, elem)->page) >> PGBITS;
+  return ((uintptr_t) hash_entry (a, struct spt_entry, elem)->page) >> PGBITS;
 }
 
 bool
-hash_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED)
+hash_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED)
 {
-  return hash_entry (a_, struct spt_entry, elem)->page < hash_entry (b_, struct spt_entry, elem)->page;
+  return hash_entry (a, struct spt_entry, elem)->page < hash_entry (b, struct spt_entry, elem)->page;
 }
 
 bool 
@@ -69,7 +69,6 @@ spt_add_file_entry(void* vaddr, struct file* file, off_t offset, size_t read_byt
   spte->read_bytes = read_bytes;
   spte->zero_bytes = zero_bytes;
   spte->writable = writable;
-  spte->memory = false;
   spte->pinning = false;
   spte->type = LOAD;
 
@@ -92,7 +91,6 @@ bool spt_add_mmap_entry(void* vaddr, struct file* file, off_t offset, size_t rea
   spte->zero_bytes = zero_bytes;
   spte->writable = writable;
   spte->type = MMAP;
-  spte->memory = false;
   spte->pinning = false;
 
   if (!add_spt_entry(spte)) {
@@ -112,7 +110,6 @@ bool spt_add_stack_entry(void *vaddr) {
   spte->page = vaddr;
   spte->writable = true;
   spte->owner = thread_current();
-  spte->memory = false;
   spte->type = STACK;
   spte->pinning = false;
 
@@ -138,12 +135,11 @@ bool load_page_mmap (struct spt_entry *spte){
     }
     memset (frame + spte->read_bytes, 0, spte->zero_bytes);
   }
-  if (!install_page_ (spte->page, frame, spte->writable)) 
+  if (!install_page (spte->page, frame, spte->writable)) 
   {
     free_frame(frame);
     return false; 
   }   
-  spte->memory = true;
   spte->pinning = false;
   return true;
 }
@@ -160,12 +156,12 @@ bool load_page_lazy (struct spt_entry *spte){
     }
     memset (frame + spte->read_bytes, 0, spte->zero_bytes);
   }
-  if (!install_page_ (spte->page, frame, spte->writable)) 
+  if (!install_page (spte->page, frame, spte->writable)) 
   {
     free_frame(frame);
     return false; 
   }   
-  spte->memory = true;
+  spte->pinning = false;
   return true;
 }
 
@@ -186,7 +182,7 @@ bool grow_stack(void *addr) {
       return false;
     }
 
-    if (!install_page_ (page, new_frame, true)) 
+    if (!install_page (page, new_frame, true)) 
     {
       delete_spt_entry(page);
       free_frame(new_frame);
@@ -196,16 +192,6 @@ bool grow_stack(void *addr) {
     return true;
 }
 
-bool
-install_page_ (void *upage, void *kpage, bool writable)
-{
-  struct thread *t = thread_current ();
-
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
 
 void free_page(struct hash_elem *h, void* aux UNUSED) {
   struct spt_entry* spte = hash_entry(h, struct spt_entry, elem);

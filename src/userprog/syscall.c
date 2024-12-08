@@ -59,6 +59,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       f->eax = filesize(args[1]);
       break;
     case SYS_READ:
+      check_pointer_validity(args + 1);
+      check_pointer_validity(args + 2);
+      check_pointer_validity(args + 3);
       f->eax = read(args[1], (void*) args[2], (unsigned) args[3]);
       break;
     case SYS_WRITE:
@@ -178,11 +181,28 @@ read (int fd, void *buffer, unsigned size)
 {
   if (fd < 0 || buffer == NULL)
     return -1;
-  
-  int bytes_read;
   check_buffer_validity(buffer, size);
-  if (!lock_held_by_current_thread (&fs_lock))
+  // for (unsigned i = 0; i < size; i++) {
+  //   if (buffer + i == NULL || !is_user_vaddr(buffer + i))
+  //     exit(-1);
+  // }
+
+  int bytes_read;
+  // void *buffer_rd = pg_round_down(buffer);
+  // void *buffer_page;
+
+  // unsigned readsize = (unsigned) (buffer_rd + PGSIZE - buffer);
+
+  // for (buffer_page = buffer_rd; buffer_page <= buffer+size; buffer_page += PGSIZE){
+  //     struct s_page_table_entry *spte = find_spt_entry(buffer_page);
+  //     if (!spte) {
+  //       grow_stack(buffer_page);
+  //     }
+  // }
+  if (!lock_held_by_current_thread (&fs_lock)){
     lock_acquire(&fs_lock);
+  }
+
   if (fd == STDIN_FILENO) {
     unsigned i;
     for (i = 0; i < size; i++) {
@@ -271,8 +291,7 @@ check_buffer_validity (const void *buffer, unsigned size) {
 }
 
 mapid_t mmap(int fd, void *addr) {
-  if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1) return -1;
-  if(!is_user_vaddr(addr)) return -1;
+  if (addr == NULL || pg_ofs(addr) != 0 || fd <= 1 || !is_user_vaddr(addr)) return -1;
 
   struct thread *cur = thread_current();
 

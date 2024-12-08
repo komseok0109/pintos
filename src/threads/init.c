@@ -100,8 +100,6 @@ main (void)
   palloc_init (user_page_limit);
   malloc_init ();
   paging_init ();
-  frame_init();
-  swap_init();
 
   /* Segmentation. */
 #ifdef USERPROG
@@ -130,8 +128,10 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
-
+  
   printf ("Boot complete.\n");
+  frame_init();
+  swap_init();
   
   /* Run actions specified on kernel command line. */
   run_actions (argv);
