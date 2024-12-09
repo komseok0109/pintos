@@ -11,6 +11,7 @@
 #include <string.h>
 #include "userprog/process.h"
 #include "vm/swap.h"
+#include <stdio.h>
 
 #define STACK_LIMIT (8 * 1024 * 1024)
 
@@ -173,11 +174,13 @@ bool is_stack_access(void *fault_addr, void *esp) {
 
 bool grow_stack(void *addr) {
     void *page = pg_round_down(addr);
+    if (find_spt_entry(page) == NULL){
+      if (!spt_add_stack_entry(page)){
+        return false;
+      }
+    }
 
-    if (!spt_add_stack_entry(page))
-      return false;
-
-    void* new_frame = allocate_frame(PAL_USER ,page);
+    void* new_frame = allocate_frame(PAL_USER|PAL_ZERO ,page);
     
     if (new_frame == NULL) {
       delete_spt_entry(page);
@@ -190,6 +193,12 @@ bool grow_stack(void *addr) {
       free_frame(new_frame);
       return false; 
     }  
+    if (thread_current()->stack_end == NULL)
+      thread_current()->stack_end = page + PGSIZE;
+    else {
+      if (thread_current()->stack_end > page + PGSIZE)
+        thread_current()->stack_end = page + PGSIZE;
+    }
     
     return true;
 }

@@ -132,6 +132,8 @@ struct thread
     struct list file_mapping_table;
     mapid_t next_mapid;
 
+    void* stack_end;
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

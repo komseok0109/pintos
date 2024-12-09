@@ -22,8 +22,8 @@ static struct lock fs_lock;
 void
 syscall_init (void) 
 {
-  lock_init(&fs_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&fs_lock);
 }
 
 static void
@@ -177,32 +177,47 @@ filesize (int fd) {
 }
 
 int
-read (int fd, void *buffer, unsigned size)
-{
-  if (fd < 0 || buffer == NULL)
-    return -1;
-  check_buffer_validity(buffer, size);
-
-  int bytes_read;
-  if (!lock_held_by_current_thread (&fs_lock)){
-    lock_acquire(&fs_lock);
-  }
-
-  if (fd == STDIN_FILENO) {
-    unsigned i;
-    for (i = 0; i < size; i++) {
-      if ((((char *)buffer)[i] = input_getc()) == '\0')
-        break;
+read (int fd, void *buffer, unsigned size) {
+    if (fd < 0) {
+        return -1;
+    } 
+    // if (buffer < 0x08084000 )
+    //   exit(-1);
+    if (buffer == NULL || !is_user_vaddr(buffer)) {
+        exit(-1);
     }
-    bytes_read = i;
-  }
-  else {
+    if (buffer + size == NULL || !is_user_vaddr(buffer+size)){
+      exit(-1);
+    }
+    void* buffer_ = pg_round_down(buffer);
+    for (unsigned i = 0; i + buffer_ <= buffer + size; i += PGSIZE) {
+        if (find_spt_entry(buffer_+i) == NULL && buffer_ + i < thread_current()->stack_end){
+          exit(-1);
+        }
+        void *page = pagedir_get_page(thread_current()->pagedir, buffer_ + i);
+        if (page == NULL) {
+            if (!grow_stack(buffer_ + i)) {
+                exit(-1); 
+            }
+        }
+    }
+    if (fd == 0) {
+        unsigned bytes_read = 0;
+        while (bytes_read < size) {
+            char c = input_getc(); 
+            ((char *)buffer)[bytes_read++] = c;
+            if (c == '\n') break;
+        }
+        return bytes_read;
+    }
     struct file *f = thread_get_file(fd);
-    bytes_read = f != NULL ? file_read(f, buffer, size) : -1;
-  }
-  lock_release(&fs_lock);
-  
-  return bytes_read;
+    if (f == NULL) {
+        return -1; 
+    }
+    lock_acquire(&fs_lock); 
+    int bytes_read = file_read(f, buffer, size);
+    lock_release(&fs_lock);
+    return bytes_read;
 }
 
 int 
